@@ -1,3 +1,12 @@
+/**
+ * @license
+ * IMAM System - Integrated Madrasah Academic Manager
+ * Developed by: Akhmad Arifin (Lead Developer & System Architect)
+ * NIP: 19901004 202521 1012
+ * Role: Fullstack & UI/UX Engineer
+ * Description: Mengembangkan solusi teknologi pendidikan untuk efisiensi dan transparansi manajemen madrasah.
+ * Copyright (c) 2025 MAN 1 Hulu Sungai Tengah. All rights reserved.
+ */
 
 import React, { useState, useEffect } from 'react';
 import Layout from './Layout';

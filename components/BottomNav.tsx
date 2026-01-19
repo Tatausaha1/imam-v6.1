@@ -55,10 +55,10 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentView, onNavigate }) => {
             {/* --- FLOATING ACTION GROUP (Raised to bottom-24) --- */}
             <div className="absolute bottom-24 right-6 z-50 flex flex-col items-center gap-4">
                 
-                {/* 1. FLOATING CHAT BUTTON */}
+                {/* 1. FLOATING CHAT BUTTON (Helpdesk) */}
                 <div className="flex flex-col items-center gap-1 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-150">
                     <div className="px-2 py-0.5 bg-violet-600 dark:bg-violet-500 rounded-full shadow-lg border border-white/20">
-                        <span className="text-[6px] font-black text-white uppercase tracking-[0.2em]">Tanya AI</span>
+                        <span className="text-[6px] font-black text-white uppercase tracking-[0.2em]">Panduan AI</span>
                     </div>
                     <button 
                         onClick={() => onNavigate(ViewState.ADVISOR)}

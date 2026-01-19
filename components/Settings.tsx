@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import Layout from './Layout';
 import { ViewState, UserRole } from '../types';
@@ -17,7 +18,12 @@ import {
   SparklesIcon,
   MegaphoneIcon,
   ArrowPathIcon,
-  UserIcon
+  UserIcon,
+  ChartBarIcon,
+  Squares2x2Icon,
+  ArrowTrendingUpIcon,
+  CalendarIcon,
+  XCircleIcon
 } from './Icons';
 import { toast } from 'sonner';
 
@@ -29,6 +35,8 @@ interface SettingsProps {
   onToggleTheme: () => void;
   userRole: UserRole;
 }
+
+type WidgetId = 'metrics' | 'quickActions' | 'trend' | 'agenda';
 
 const Settings: React.FC<SettingsProps> = ({ 
   onBack, 
@@ -42,6 +50,14 @@ const Settings: React.FC<SettingsProps> = ({
   const [customLogo, setCustomLogo] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Widget Configuration State
+  const [visibleWidgets, setVisibleWidgets] = useState<Record<WidgetId, boolean>>({
+    metrics: true,
+    quickActions: true,
+    trend: true,
+    agenda: true
+  });
+
   // News Card Theme Configuration State
   const [themeConfig, setThemeConfig] = useState({
     bg: isDarkMode ? '#1e293b' : '#ffffff',
@@ -50,27 +66,34 @@ const Settings: React.FC<SettingsProps> = ({
     border: isDarkMode ? '#334155' : '#f1f5f9'
   });
 
-  // Check permissions
   const canCustomize = userRole === UserRole.ADMIN || userRole === UserRole.DEVELOPER;
 
   useEffect(() => {
-    // Load existing logo from storage
+    // Load existing logo
     const savedLogo = localStorage.getItem('custom_app_logo');
     if (savedLogo) setCustomLogo(savedLogo);
 
     // Load News Card Theme
     const savedTheme = localStorage.getItem('news_card_theme');
     if (savedTheme) setThemeConfig(JSON.parse(savedTheme));
+
+    // Load Widget Prefs
+    const savedWidgets = localStorage.getItem('dashboard_widgets');
+    if (savedWidgets) {
+        try {
+            setVisibleWidgets(JSON.parse(savedWidgets));
+        } catch (e) {
+            console.error("Failed to parse widgets");
+        }
+    }
   }, []);
 
-  // Apply CSS Variables on Change
-  useEffect(() => {
-    document.documentElement.style.setProperty('--news-card-bg', themeConfig.bg);
-    document.documentElement.style.setProperty('--news-card-primary', themeConfig.primary);
-    document.documentElement.style.setProperty('--news-card-secondary', themeConfig.secondary);
-    document.documentElement.style.setProperty('--news-card-border', themeConfig.border);
-    localStorage.setItem('news_card_theme', JSON.stringify(themeConfig));
-  }, [themeConfig]);
+  const toggleWidget = (id: WidgetId) => {
+    const newVisible = { ...visibleWidgets, [id]: !visibleWidgets[id] };
+    setVisibleWidgets(newVisible);
+    localStorage.setItem('dashboard_widgets', JSON.stringify(newVisible));
+    toast.info(`Widget ${id} ${newVisible[id] ? 'ditampilkan' : 'disembunyikan'}`);
+  };
 
   const handleResetTheme = () => {
     const defaults = {
@@ -156,8 +179,46 @@ const Settings: React.FC<SettingsProps> = ({
       icon={CogIcon}
       onBack={onBack}
     >
-      <div className="p-4 lg:p-6 space-y-6 max-w-2xl mx-auto w-full pb-32">
+      <div className="p-4 lg:p-6 space-y-8 max-w-2xl mx-auto w-full pb-32">
         
+        {/* Dashboard Customization Section */}
+        <div className="space-y-3">
+             <div className="flex items-center gap-2 ml-2">
+                <Squares2x2Icon className="w-4 h-4 text-indigo-500" />
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tampilan Beranda</h3>
+             </div>
+             
+             <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 p-2 shadow-sm">
+                {[
+                  { id: 'metrics', label: 'Statistik Utama', icon: ChartBarIcon, desc: 'Ringkasan data harian' },
+                  { id: 'quickActions', label: 'Menu Navigasi', icon: Squares2x2Icon, desc: 'Akses cepat fitur' },
+                  { id: 'trend', label: 'Grafik Tren', icon: ArrowTrendingUpIcon, desc: 'Visualisasi kehadiran' },
+                  { id: 'agenda', label: 'Agenda Hari Ini', icon: CalendarIcon, desc: 'Jadwal mapel harian' }
+                ].map((item, idx, arr) => (
+                  <div key={item.id}>
+                    <div className="flex items-center justify-between p-4">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${visibleWidgets[item.id as WidgetId] ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600' : 'bg-slate-50 dark:bg-slate-900 text-slate-300'}`}>
+                           <item.icon className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-800 dark:text-white">{item.label}</h4>
+                          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-tighter">{item.desc}</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => toggleWidget(item.id as WidgetId)}
+                        className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${visibleWidgets[item.id as WidgetId] ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'}`}
+                      >
+                        <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-300 ${visibleWidgets[item.id as WidgetId] ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                      </button>
+                    </div>
+                    {idx < arr.length - 1 && <hr className="border-slate-50 dark:border-slate-700 mx-4" />}
+                  </div>
+                ))}
+             </div>
+        </div>
+
         {/* Branding Section */}
         {canCustomize && (
           <div className="space-y-3">
@@ -203,80 +264,17 @@ const Settings: React.FC<SettingsProps> = ({
           </div>
         )}
 
-        {/* --- NEWS THEME CONFIGURATION --- */}
-        <div className="space-y-3">
-            <div className="flex items-center gap-2 ml-2">
-                <MegaphoneIcon className="w-4 h-4 text-indigo-500" />
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Konfigurasi Tema Berita</h3>
-            </div>
-            
-            <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 p-5 shadow-sm space-y-6">
-                {/* Preview Card */}
-                <div className="p-5 rounded-2xl border shadow-sm transition-all flex flex-col gap-3" style={{ backgroundColor: themeConfig.bg, borderColor: themeConfig.border }}>
-                    <div className="flex justify-between items-center">
-                         <span className="px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider" style={{ backgroundColor: themeConfig.secondary, color: themeConfig.primary }}>PENGUMUMAN</span>
-                    </div>
-                    <div className="flex gap-3">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: themeConfig.secondary }}>
-                             {/* Fix: Wrapped UserIcon in a div to apply style because UserIcon component doesn't accept a style prop directly */}
-                             <div style={{ color: themeConfig.primary }} className="flex items-center justify-center">
-                                <UserIcon className="w-5 h-5" />
-                             </div>
-                        </div>
-                        <div className="flex-1">
-                            <h4 className="font-bold text-sm" style={{ color: themeConfig.primary }}>Contoh Kartu Berita</h4>
-                            <p className="text-xs text-slate-500 mt-1">Gunakan panel di bawah untuk mengubah warna utama, aksen (sekunder), dan latar belakang.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Latar</label>
-                        <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-xl">
-                            <input type="color" value={themeConfig.bg} onChange={(e) => setThemeConfig({...themeConfig, bg: e.target.value})} className="w-8 h-8 rounded-lg bg-transparent cursor-pointer border-none" />
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Primer</label>
-                        <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-xl">
-                            <input type="color" value={themeConfig.primary} onChange={(e) => setThemeConfig({...themeConfig, primary: e.target.value})} className="w-8 h-8 rounded-lg bg-transparent cursor-pointer border-none" />
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Sekunder</label>
-                        <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-xl">
-                            <input type="color" value={themeConfig.secondary} onChange={(e) => setThemeConfig({...themeConfig, secondary: e.target.value})} className="w-8 h-8 rounded-lg bg-transparent cursor-pointer border-none" />
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Border</label>
-                        <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-xl">
-                            <input type="color" value={themeConfig.border} onChange={(e) => setThemeConfig({...themeConfig, border: e.target.value})} className="w-8 h-8 rounded-lg bg-transparent cursor-pointer border-none" />
-                        </div>
-                    </div>
-                </div>
-
-                <button 
-                    onClick={handleResetTheme}
-                    className="w-full py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-slate-200 transition-all"
-                >
-                    <ArrowPathIcon className="w-4 h-4" /> Reset Tema Berita
-                </button>
-            </div>
-        </div>
-
         {/* Appearance Group */}
         <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-2">Tampilan</h3>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-2">Tampilan Sistem</h3>
             <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 overflow-hidden shadow-sm">
                 <button onClick={onToggleTheme} className="w-full flex items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-left group">
                     <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 group-hover:scale-110 transition-transform">
                         {isDarkMode ? <MoonIcon className="w-6 h-6" /> : <SunIcon className="w-6 h-6" />}
                     </div>
                     <div className="flex-1">
-                        <h4 className="text-sm font-bold text-slate-800 dark:text-white">Tema Aplikasi</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{isDarkMode ? 'Mode Gelap' : 'Mode Terang'}</p>
+                        <h4 className="text-sm font-bold text-slate-800 dark:text-white">Mode Tema</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{isDarkMode ? 'Mode Gelap Aktif' : 'Mode Terang Aktif'}</p>
                     </div>
                     <div className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-200'}`}>
                         <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-300 ${isDarkMode ? 'translate-x-6' : 'translate-x-0'}`}></div>

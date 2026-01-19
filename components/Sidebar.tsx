@@ -1,3 +1,8 @@
+/**
+ * @license
+ * IMAM System - Integrated Madrasah Academic Manager
+ */
+
 import React, { useMemo } from 'react';
 import { ViewState, UserRole } from '../types';
 import { 
@@ -5,7 +10,7 @@ import {
   BookOpenIcon, EnvelopeIcon, CalendarDaysIcon, UsersIcon, LogOutIcon,
   BriefcaseIcon, CalendarIcon, ArrowTrendingUpIcon, BuildingLibraryIcon,
   InfoIcon, XMarkIcon, CommandLineIcon, ClipboardDocumentListIcon, AcademicCapIcon,
-  SparklesIcon
+  SparklesIcon, CogIcon
 } from './Icons';
 
 interface SidebarProps {
@@ -29,6 +34,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
   
   const menuItems: SidebarItem[] = [
     { label: 'Beranda', icon: HomeIcon, view: ViewState.DASHBOARD, section: 'Utama' },
+    { label: 'Profil Madrasah', icon: BuildingLibraryIcon, view: ViewState.MADRASAH_INFO, section: 'Data Induk' },
     { label: 'Data Siswa', icon: UsersIcon, view: ViewState.STUDENTS, section: 'Data Induk' },
     { label: 'Data Guru', icon: BriefcaseIcon, view: ViewState.TEACHERS, section: 'Data Induk' },
     { label: 'Data Kelas', icon: BookOpenIcon, view: ViewState.CLASSES, section: 'Data Induk' },
@@ -39,13 +45,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
     { label: 'Scan QR', icon: QrCodeIcon, view: ViewState.SCANNER, section: 'Presensi' },
     { label: 'Input Presensi', icon: QrCodeIcon, view: ViewState.PRESENSI, section: 'Presensi' },
     { label: 'Riwayat Absen', icon: CalendarDaysIcon, view: ViewState.ATTENDANCE_HISTORY, section: 'Presensi' },
-    { label: 'Asisten AI', icon: RobotIcon, view: ViewState.CONTENT_GENERATION, section: 'Administrasi' },
+    { label: 'Panduan AI', icon: RobotIcon, view: ViewState.ADVISOR, section: 'Bantuan' },
+    { label: 'Alat Guru AI', icon: RobotIcon, view: ViewState.CONTENT_GENERATION, section: 'Administrasi' },
     { label: 'Layanan Surat', icon: EnvelopeIcon, view: ViewState.LETTERS, section: 'Administrasi' },
+    { label: 'Laporan Cetak', icon: ChartBarIcon, view: ViewState.REPORTS, section: 'Administrasi' },
     { label: 'Profil Saya', icon: UserIcon, view: ViewState.PROFILE, section: 'Sistem' },
+    { label: 'Pengaturan', icon: CogIcon, view: ViewState.SETTINGS, section: 'Sistem' },
     { label: 'Tentang', icon: InfoIcon, view: ViewState.ABOUT, section: 'Sistem' },
   ];
 
-  // Fix: Explicitly typed useMemo return to Record<string, SidebarItem[]> to prevent 'unknown' inference in subsequent Object.entries
   const sections = useMemo<Record<string, SidebarItem[]>>(() => {
       const groups: Record<string, SidebarItem[]> = {};
       menuItems.forEach(item => {
@@ -63,7 +71,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
             <AppLogo className="w-9 h-9" />
             <div>
                 <h1 className="font-black text-slate-900 dark:text-white text-lg leading-none">IMAM</h1>
-                <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-1">Digital Hub</p>
+                <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-1">MAN 1 Hulu Sungai Tengah</p>
             </div>
         </div>
         {onClose && (
@@ -74,7 +82,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-4 scrollbar-hide">
-        {/* Fix: Cast Object.entries to ensure [string, SidebarItem[]][] to resolve the 'unknown' error in items.map */}
         {(Object.entries(sections) as [string, SidebarItem[]][]).map(([section, items]) => (
             <div key={section} className="space-y-0.5">
                 <div className="px-2 mb-1">
@@ -101,10 +108,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
 
       <div className="p-2 border-t border-slate-100 dark:border-slate-800 mt-auto bg-slate-50/50 dark:bg-slate-900/50">
         <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm cursor-pointer" onClick={() => onNavigate(ViewState.PROFILE)}>
-            <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center font-black text-[10px] text-indigo-600">{userRole.charAt(0).toUpperCase()}</div>
+            <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center font-black text-[10px] text-indigo-600">{(userRole || 'G').charAt(0).toUpperCase()}</div>
             <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-black text-slate-800 dark:text-white truncate uppercase tracking-tighter">Profil Akun</p>
-                <p className="text-[8px] text-slate-400 font-bold uppercase truncate">{userRole}</p>
+                <p className="text-[8px] text-slate-400 font-bold uppercase truncate">{userRole || '-'}</p>
             </div>
             {onLogout && (
                 <button onClick={(e) => { e.stopPropagation(); onLogout(); }} className="p-1 text-slate-300 hover:text-red-500 transition-colors">

@@ -1,3 +1,9 @@
+
+/**
+ * @license
+ * IMAM System - Integrated Madrasah Academic Manager
+ */
+
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
@@ -14,6 +20,7 @@ const firebaseConfig = {
   measurementId: "G-WDB4WFXBLZ"
 };
 
+// Mode simulasi aktif jika variabel env NEXT_PUBLIC_MOCK_AUTH disetel 'true'
 export const isMockMode = typeof window !== 'undefined' && (window as any).process?.env?.NEXT_PUBLIC_MOCK_AUTH === 'true';
 
 let app: firebase.app.App | undefined;
@@ -28,30 +35,27 @@ try {
       app = firebase.app();
   }
 
-  if (!isMockMode) {
-      auth = firebase.auth();
-      db = firebase.firestore();
-      
-      // --- AKTIFKAN OFFLINE PERSISTENCE ---
-      if (typeof window !== 'undefined') {
-          db.enablePersistence({ synchronizeTabs: true })
-            .catch((err) => {
-                if (err.code === 'failed-precondition') {
-                    console.warn("Multiple tabs open, persistence can only be enabled in one tab at a time.");
-                } else if (err.code === 'unimplemented') {
-                    console.warn("The current browser does not support all of the features required to enable persistence.");
-                }
-            });
-      }
-
-      if (typeof window !== 'undefined' && firebase.analytics.isSupported()) {
-         analytics = firebase.analytics();
-      }
-
-      console.log("Firebase initialized in REAL Mode with Offline Persistence");
-  } else {
-      console.log("Firebase initialized in MOCK Mode");
+  auth = firebase.auth();
+  db = firebase.firestore();
+  
+  if (typeof window !== 'undefined') {
+      // Mengaktifkan sinkronisasi data offline lintas tab browser
+      db.enablePersistence({ synchronizeTabs: true })
+        .catch((err) => {
+            if (err.code === 'failed-precondition') {
+                console.warn("Firestore: Multiple tabs open, persistence limited.");
+            } else if (err.code === 'unimplemented') {
+                console.warn("Firestore: Browser doesn't support persistence.");
+            }
+        });
   }
+
+  if (typeof window !== 'undefined' && firebase.analytics.isSupported()) {
+     analytics = firebase.analytics();
+  }
+  
+  console.log("IMAM Database Connection: " + (isMockMode ? "SIMULATION MODE" : "LIVE CLOUD CONNECTED"));
+
 } catch (error) {
   console.error("Firebase initialization error:", error);
 }

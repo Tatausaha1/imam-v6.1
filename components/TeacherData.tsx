@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getTeachers, addTeacher, updateTeacher, deleteTeacher, bulkImportTeachers } from '../services/teacherService';
 import { Teacher, UserRole } from '../types';
@@ -11,7 +12,8 @@ import {
   BriefcaseIcon, Search, PlusIcon, PencilIcon, TrashIcon, 
   UserIcon, PhoneIcon, EnvelopeIcon, CheckCircleIcon, XCircleIcon, 
   MapPinIcon, AcademicCapIcon, ArrowPathIcon, FileSpreadsheet,
-  FileText, ArrowDownTrayIcon, ArrowRightIcon
+  FileText, ArrowDownTrayIcon, ArrowRightIcon, Loader2, SaveIcon,
+  ChevronDownIcon, IdentificationIcon, BookOpenIcon
 } from './Icons';
 
 interface TeacherDataProps {
@@ -24,22 +26,19 @@ const TeacherData: React.FC<TeacherDataProps> = ({ onBack, userRole }) => {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   
-  // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('All');
   const [selectedStatus, setSelectedStatus] = useState('All');
   
-  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<Teacher>>({
-      status: 'PNS'
+      name: '', nip: '', subject: '', status: 'PNS', phone: '', email: '', birthDate: '', address: ''
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const canManage = userRole === UserRole.ADMIN || userRole === UserRole.GURU;
+  const canManage = userRole === UserRole.ADMIN || userRole === UserRole.DEVELOPER;
 
-  // --- REALTIME DATA LISTENER ---
   useEffect(() => {
     setLoading(true);
 
@@ -64,14 +63,8 @@ const TeacherData: React.FC<TeacherDataProps> = ({ onBack, userRole }) => {
                 setTeachers(liveData);
                 setLoading(false);
             },
-            error => {
-                console.error("Error fetching realtime teachers:", error);
-                if (error.code === 'permission-denied' || error.message?.includes('Missing or insufficient permissions')) {
-                    toast.error("Akses Database Terbatas. Pastikan aturan keamanan (Security Rules) telah dikonfigurasi.");
-                    setTeachers([]); // Kosongkan
-                } else {
-                    toast.error("Gagal memuat data guru.");
-                }
+            err => {
+                console.warn("Teacher fetch denied:", err.message);
                 setLoading(false);
             }
         );
@@ -79,7 +72,6 @@ const TeacherData: React.FC<TeacherDataProps> = ({ onBack, userRole }) => {
     return () => unsubscribe();
   }, []);
 
-  // Derived Statistics
   const stats = useMemo(() => {
       return {
           total: teachers.length,
@@ -90,13 +82,11 @@ const TeacherData: React.FC<TeacherDataProps> = ({ onBack, userRole }) => {
       };
   }, [teachers]);
 
-  // Unique Subjects for Filter
   const uniqueSubjects = useMemo(() => {
       const subjects = teachers.map(t => t.subject).filter(Boolean);
       return Array.from(new Set(subjects)).sort();
   }, [teachers]);
 
-  // Filter Logic
   const processedTeachers = useMemo(() => {
       const lowerQuery = searchQuery.toLowerCase().trim();
       return teachers.filter(t => {
@@ -114,7 +104,56 @@ const TeacherData: React.FC<TeacherDataProps> = ({ onBack, userRole }) => {
       });
   }, [teachers, searchQuery, selectedSubject, selectedStatus]);
 
-  // CRUD Handlers
+  const handleExportPDF = () => {
+    if (loading) return;
+    if (processedTeachers.length === 0) {
+      toast.error("Tidak ada data untuk dicetak.");
+      return;
+    }
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text("Daftar Guru & Tenaga Kependidikan", 14, 20);
+    doc.setFontSize(11);
+    doc.text(`Dicetak pada: ${new Date().toLocaleString('id-ID')}`, 14, 28);
+
+    autoTable(doc, {
+      startY: 35,
+      head: [['No', 'Nama Lengkap', 'NIP/NIY', 'Mata Pelajaran', 'Status']],
+      body: processedTeachers.map((t, i) => [
+        i + 1,
+        (t.name || '').toUpperCase(),
+        t.nip || '-',
+        (t.subject || '').toUpperCase(),
+        t.status
+      ]),
+      headStyles: { fillColor: [67, 56, 202] },
+    });
+
+    doc.save(`Daftar_Guru_${new Date().getTime()}.pdf`);
+    toast.success("Laporan PDF berhasil diunduh.");
+  };
+
+  const handleExportExcel = () => {
+    if (loading) return;
+    if (processedTeachers.length === 0) {
+      toast.error("Tidak ada data untuk diekspor.");
+      return;
+    }
+    const worksheet = XLSX.utils.json_to_sheet(processedTeachers.map((t, i) => ({
+      'No': i + 1,
+      'Nama Lengkap': t.name,
+      'NIP/NIY': t.nip,
+      'Mata Pelajaran': t.subject,
+      'Status': t.status,
+      'Telepon': t.phone || '-',
+      'Email': t.email || '-'
+    })));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Data Guru");
+    XLSX.writeFile(workbook, `Data_Guru_${new Date().getTime()}.xlsx`);
+    toast.success("Excel berhasil diunduh.");
+  };
+
   const handleEdit = (teacher: Teacher) => {
       setEditingId(teacher.id || null);
       setFormData({ ...teacher });
@@ -124,10 +163,10 @@ const TeacherData: React.FC<TeacherDataProps> = ({ onBack, userRole }) => {
   const handleDelete = async (id: string, name: string) => {
       if (window.confirm(`Hapus data guru ${name}?`)) {
           try {
-              await deleteTeacher(id);
-              // Optimistic update not needed with onSnapshot
               if (isMockMode) {
                   setTeachers(prev => prev.filter(t => t.id !== id));
+              } else {
+                  await deleteTeacher(id);
               }
               toast.success("Data guru berhasil dihapus");
           } catch (e) {
@@ -147,163 +186,19 @@ const TeacherData: React.FC<TeacherDataProps> = ({ onBack, userRole }) => {
       try {
           if (editingId) {
               await updateTeacher(editingId, formData);
-              // Mock Mode manual update
-              if (isMockMode) {
-                  setTeachers(prev => prev.map(t => t.id === editingId ? { ...t, ...formData } as Teacher : t));
-              }
               toast.success("Data diperbarui", { id: toastId });
           } else {
               const newTeacher = { ...formData, nip: formData.nip || '-' } as Teacher;
               await addTeacher(newTeacher);
-              // Mock Mode manual fetch
-              if (isMockMode) {
-                  const data = await getTeachers();
-                  setTeachers(data);
-              }
               toast.success("Guru ditambahkan", { id: toastId });
           }
           setIsModalOpen(false);
           setEditingId(null);
-          setFormData({ status: 'PNS' });
+          setFormData({ name: '', nip: '', subject: '', status: 'PNS' });
       } catch (e) {
           console.error(e);
           toast.error("Gagal menyimpan", { id: toastId });
       }
-  };
-
-  // --- IMPORT / EXPORT HANDLERS ---
-
-  const handleDownloadTemplate = () => {
-      const templateData = [
-          {
-              "Nama Lengkap": "Contoh: Budi Santoso, S.Pd",
-              "NIP": "1980xxxx (kosongkan jika tidak ada)",
-              "Mata Pelajaran": "Matematika",
-              "Status": "PNS",
-              "No. Telepon": "0812xxxx",
-              "Email": "budi@email.com",
-              "Tanggal Lahir": "1980-01-01",
-              "Alamat": "Jl. Merdeka No. 1"
-          },
-          {
-              "Nama Lengkap": "Contoh: Siti Aminah",
-              "NIP": "-",
-              "Mata Pelajaran": "Bahasa Inggris",
-              "Status": "Honorer",
-              "No. Telepon": "0852xxxx",
-              "Email": "siti@email.com",
-              "Tanggal Lahir": "1995-05-20",
-              "Alamat": "Jl. Anggrek"
-          }
-      ];
-      
-      const worksheet = XLSX.utils.json_to_sheet(templateData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Data Guru");
-      XLSX.writeFile(workbook, "Template_Import_Guru.xlsx");
-      toast.success("Template berhasil diunduh");
-  };
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-
-      setImporting(true);
-      const toastId = toast.loading("Mengimpor data guru...");
-
-      try {
-          const data = await file.arrayBuffer();
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[sheetName];
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const newTeachers: Teacher[] = jsonData.map((row: any) => ({
-              name: row["Nama Lengkap"] || "Tanpa Nama",
-              nip: row["NIP"] || "-",
-              subject: row["Mata Pelajaran"] || "Umum",
-              status: (row["Status"] as any) || "Honorer",
-              phone: row["No. Telepon"] || "",
-              email: row["Email"] || "",
-              birthDate: row["Tanggal Lahir"] || "",
-              address: row["Alamat"] || ""
-          }));
-
-          if (newTeachers.length > 0) {
-              await bulkImportTeachers(newTeachers);
-              toast.success(`Berhasil mengimpor ${newTeachers.length} data guru`, { id: toastId });
-              // Automatic update via onSnapshot
-          } else {
-              toast.error("File kosong atau format salah", { id: toastId });
-          }
-      } catch (error) {
-          console.error("Import Error:", error);
-          toast.error("Gagal mengimpor file", { id: toastId });
-      } finally {
-          setImporting(false);
-          if (fileInputRef.current) fileInputRef.current.value = "";
-      }
-  };
-
-  const handleExportExcel = () => {
-      if (processedTeachers.length === 0) {
-          toast.warning("Tidak ada data untuk diekspor");
-          return;
-      }
-      const dataToExport = processedTeachers.map(t => ({
-          "Nama Lengkap": t.name,
-          "NIP": t.nip,
-          "Mata Pelajaran": t.subject,
-          "Status": t.status,
-          "No. Telepon": t.phone,
-          "Email": t.email,
-          "Tanggal Lahir": t.birthDate,
-          "Alamat": t.address
-      }));
-
-      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Data Guru");
-      XLSX.writeFile(workbook, `Data_Guru_MAN1HST_${new Date().toISOString().slice(0,10)}.xlsx`);
-      toast.success("Berhasil ekspor ke Excel");
-  };
-
-  const handleExportPDF = () => {
-      if (processedTeachers.length === 0) {
-          toast.warning("Tidak ada data untuk diekspor");
-          return;
-      }
-      const doc = new jsPDF();
-      
-      doc.setFontSize(14);
-      doc.text("LAPORAN DATA GURU DAN TENAGA KEPENDIDIKAN", 105, 15, { align: "center" });
-      doc.setFontSize(10);
-      doc.text("MAN 1 HULU SUNGAI TENGAH", 105, 22, { align: "center" });
-      doc.text(`Total: ${processedTeachers.length} Guru`, 14, 30);
-
-      const tableColumn = ["No", "Nama Lengkap", "NIP", "Mapel", "Status", "No. HP"];
-      const tableRows = processedTeachers.map((t, index) => [
-          index + 1,
-          t.name,
-          t.nip,
-          t.subject,
-          t.status,
-          t.phone || '-'
-      ]);
-
-      autoTable(doc, {
-          startY: 35,
-          head: [tableColumn],
-          body: tableRows,
-          theme: 'grid',
-          headStyles: { fillColor: [79, 70, 229] }, // Indigo
-          styles: { fontSize: 8 }
-      });
-
-      doc.save(`Laporan_Guru_${new Date().toISOString().slice(0,10)}.pdf`);
-      toast.success("Berhasil ekspor ke PDF");
   };
 
   return (
@@ -316,14 +211,16 @@ const TeacherData: React.FC<TeacherDataProps> = ({ onBack, userRole }) => {
           <div className="flex gap-2">
                 <button 
                     onClick={handleExportPDF}
-                    className="p-2.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 transition-colors"
+                    disabled={loading}
+                    className={`p-2.5 rounded-xl transition-all shadow-sm ${loading ? 'bg-slate-100 text-slate-300' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100'}`}
                     title="Export PDF"
                 >
                     <FileText className="w-5 h-5" />
                 </button>
                 <button 
                     onClick={handleExportExcel}
-                    className="p-2.5 rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-100 transition-colors"
+                    disabled={loading}
+                    className={`p-2.5 rounded-xl transition-all shadow-sm ${loading ? 'bg-slate-100 text-slate-300' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100'}`}
                     title="Export Excel"
                 >
                     <FileSpreadsheet className="w-5 h-5" />
@@ -331,352 +228,213 @@ const TeacherData: React.FC<TeacherDataProps> = ({ onBack, userRole }) => {
           </div>
       }
     >
-      <div className="p-4 lg:p-6 pb-24 space-y-6">
-          
-          {/* Stats Cards */}
+      <div className="p-4 lg:p-6 pb-32 space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
-                  <p className="text-[10px] text-slate-400 uppercase font-bold">Total Guru</p>
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-[1.8rem] border border-slate-100 dark:border-slate-700 shadow-sm">
+                  <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest">Total Guru</p>
                   <div className="flex items-center gap-2 mt-1">
                       <BriefcaseIcon className="w-5 h-5 text-indigo-500" />
-                      <span className="text-xl font-bold text-slate-800 dark:text-white">{stats.total}</span>
+                      <span className="text-xl font-black text-slate-800 dark:text-white">{stats.total}</span>
                   </div>
               </div>
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
-                  <p className="text-[10px] text-slate-400 uppercase font-bold">PNS / PPPK</p>
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-[1.8rem] border border-slate-100 dark:border-slate-700 shadow-sm">
+                  <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest">ASN</p>
                   <div className="flex items-center gap-2 mt-1">
                       <CheckCircleIcon className="w-5 h-5 text-green-500" />
-                      <span className="text-xl font-bold text-slate-800 dark:text-white">{stats.pns + stats.pppk}</span>
+                      <span className="text-xl font-black text-slate-800 dark:text-white">{stats.pns + stats.pppk}</span>
                   </div>
               </div>
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
-                  <p className="text-[10px] text-slate-400 uppercase font-bold">Honorer / GTT</p>
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-[1.8rem] border border-slate-100 dark:border-slate-700 shadow-sm">
+                  <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest">Non-ASN</p>
                   <div className="flex items-center gap-2 mt-1">
                       <AcademicCapIcon className="w-5 h-5 text-orange-500" />
-                      <span className="text-xl font-bold text-slate-800 dark:text-white">{stats.honorer}</span>
+                      <span className="text-xl font-black text-slate-800 dark:text-white">{stats.honorer}</span>
                   </div>
               </div>
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
-                  <p className="text-[10px] text-slate-400 uppercase font-bold">GTY</p>
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-[1.8rem] border border-slate-100 dark:border-slate-700 shadow-sm">
+                  <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest">Tetap Yayasan</p>
                   <div className="flex items-center gap-2 mt-1">
                       <UserIcon className="w-5 h-5 text-blue-500" />
-                      <span className="text-xl font-bold text-slate-800 dark:text-white">{stats.gty}</span>
+                      <span className="text-xl font-black text-slate-800 dark:text-white">{stats.gty}</span>
                   </div>
               </div>
           </div>
 
-          {/* Filters & Actions */}
-          <div className="flex flex-col xl:flex-row gap-3">
-              <div className="flex-1 relative">
+          <div className="bg-white dark:bg-[#151E32] p-5 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="relative group">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                   <input 
                       type="text" 
-                      placeholder="Cari nama, NIP, atau mapel..."
+                      placeholder="Cari Nama, NIP, atau Mapel..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-3 pl-10 pr-4 text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 dark:text-slate-200"
+                      className="w-full bg-slate-50 dark:bg-slate-900 border border-transparent rounded-[1.5rem] py-4 pl-12 pr-4 text-[11px] font-bold outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all text-slate-800 dark:text-white shadow-inner"
                   />
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
               </div>
               
-              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                  <div className="relative min-w-[140px]">
+              <div className="flex flex-wrap gap-2">
+                  <div className="flex-1 relative">
                       <select
                           value={selectedSubject}
                           onChange={(e) => setSelectedSubject(e.target.value)}
-                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 dark:text-slate-200 appearance-none cursor-pointer"
+                          className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-[9px] font-black uppercase appearance-none cursor-pointer"
                       >
-                          <option value="All">Semua Mapel</option>
-                          {uniqueSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+                          <option value="All">SEMUA MATA PELAJARAN</option>
+                          {uniqueSubjects.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
                       </select>
-                      <div className="absolute right-3 top-3.5 pointer-events-none text-slate-400">
-                          <ArrowRightIcon className="w-3 h-3 rotate-90" />
-                      </div>
+                      <ChevronDownIcon className="absolute right-3 top-3 pointer-events-none text-slate-400 w-3 h-3" />
                   </div>
-
-                  <div className="relative min-w-[130px]">
+                  <div className="flex-1 relative">
                       <select
                           value={selectedStatus}
                           onChange={(e) => setSelectedStatus(e.target.value)}
-                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 dark:text-slate-200 appearance-none cursor-pointer"
+                          className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-[9px] font-black uppercase appearance-none cursor-pointer"
                       >
-                          <option value="All">Semua Status</option>
+                          <option value="All">SEMUA STATUS</option>
                           <option value="PNS">PNS</option>
                           <option value="PPPK">PPPK</option>
                           <option value="GTY">GTY</option>
-                          <option value="Honorer">Honorer</option>
+                          <option value="Honorer">HONORER</option>
                       </select>
-                      <div className="absolute right-3 top-3.5 pointer-events-none text-slate-400">
-                          <ArrowRightIcon className="w-3 h-3 rotate-90" />
-                      </div>
+                      <ChevronDownIcon className="absolute right-3 top-3 pointer-events-none text-slate-400 w-3 h-3" />
                   </div>
               </div>
           </div>
 
-          {/* Admin Toolbar */}
           {canManage && (
-              <div className="flex flex-wrap gap-2 items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-4">
-                  <div className="flex gap-2">
-                        <button 
-                            onClick={handleDownloadTemplate}
-                            className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-200 transition-colors flex items-center gap-2"
-                        >
-                            <ArrowDownTrayIcon className="w-4 h-4" /> Template
-                        </button>
-                        <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={importing}
-                            className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold border border-indigo-100 dark:border-indigo-900/30 hover:bg-indigo-100 transition-colors flex items-center gap-2"
-                        >
-                            {importing ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <ArrowPathIcon className="w-4 h-4" />}
-                            Import Excel
-                        </button>
-                        <input 
-                            type="file" 
-                            ref={fileInputRef}
-                            accept=".xlsx, .xls"
-                            className="hidden"
-                            onChange={handleFileUpload}
-                        />
+              <div className="flex items-center justify-between gap-3 bg-indigo-50/50 dark:bg-indigo-900/10 p-4 rounded-[2rem] border border-indigo-100 dark:border-indigo-800 shadow-sm">
+                  <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center"><PlusIcon className="w-4 h-4"/></div>
+                      <span className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400">Manajemen GTK</span>
                   </div>
-                  
                   <button 
-                      onClick={() => {
-                          setEditingId(null);
-                          setFormData({ status: 'PNS' });
-                          setIsModalOpen(true);
-                      }}
-                      className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 dark:shadow-none ml-auto"
+                      onClick={() => { setEditingId(null); setFormData({ name: '', nip: '', subject: '', status: 'PNS' }); setIsModalOpen(true); }}
+                      disabled={loading}
+                      className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg transition-all ${loading ? 'bg-slate-100 text-slate-400' : 'bg-indigo-600 text-white shadow-indigo-500/20 active:scale-95'}`}
                   >
-                      <PlusIcon className="w-4 h-4" /> Tambah Manual
+                      Tambah Guru
                   </button>
               </div>
           )}
 
-          {/* List */}
           {loading ? (
-              <div className="text-center py-12 text-slate-400">
-                  <ArrowPathIcon className="w-8 h-8 animate-spin mx-auto mb-2" />
-                  Memuat data...
+              <div className="text-center py-20 flex flex-col items-center gap-3">
+                  <Loader2 className="w-10 h-10 animate-spin text-indigo-500 opacity-20 mb-3" />
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sinkronisasi Kepegawaian...</p>
               </div>
           ) : processedTeachers.length > 0 ? (
-              <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 overflow-hidden shadow-sm">
-                  <div className="overflow-x-auto">
-                      <table className="w-full text-sm text-left">
-                          <thead className="bg-slate-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 font-bold uppercase text-xs">
-                              <tr>
-                                  <th className="px-6 py-4">Nama & NIP</th>
-                                  <th className="px-6 py-4">Mapel</th>
-                                  <th className="px-6 py-4">Status</th>
-                                  <th className="px-6 py-4 hidden md:table-cell">Kontak</th>
-                                  {canManage && <th className="px-6 py-4 text-center">Aksi</th>}
-                              </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                              {processedTeachers.map((t) => (
-                                  <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors group">
-                                      <td className="px-6 py-4">
-                                          <div className="font-bold text-slate-800 dark:text-slate-200">{t.name}</div>
-                                          <div className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">{t.nip}</div>
-                                      </td>
-                                      <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300">
-                                          {t.subject}
-                                      </td>
-                                      <td className="px-6 py-4">
-                                          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
-                                              t.status === 'PNS' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                                              t.status === 'PPPK' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' :
-                                              'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-                                          }`}>
-                                              {t.status}
-                                          </span>
-                                      </td>
-                                      <td className="px-6 py-4 hidden md:table-cell">
-                                          <div className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-400">
-                                              {t.phone && (
-                                                  <div className="flex items-center gap-1.5">
-                                                      <PhoneIcon className="w-3 h-3" /> {t.phone}
-                                                  </div>
-                                              )}
-                                              {t.email && (
-                                                  <div className="flex items-center gap-1.5">
-                                                      <EnvelopeIcon className="w-3 h-3" /> {t.email}
-                                                  </div>
-                                              )}
-                                          </div>
-                                      </td>
-                                      {canManage && (
-                                          <td className="px-6 py-4 text-center">
-                                              <div className="flex justify-center gap-2">
-                                                  <button 
-                                                      onClick={() => handleEdit(t)}
-                                                      className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg text-slate-400 hover:text-indigo-500 transition-colors"
-                                                  >
-                                                      <PencilIcon className="w-4 h-4" />
-                                                  </button>
-                                                  <button 
-                                                      onClick={() => handleDelete(t.id || '', t.name)}
-                                                      className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-slate-400 hover:text-red-500 transition-colors"
-                                                  >
-                                                      <TrashIcon className="w-4 h-4" />
-                                                  </button>
-                                              </div>
-                                          </td>
-                                      )}
-                                  </tr>
-                              ))}
-                          </tbody>
-                      </table>
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in duration-500">
+                  {processedTeachers.map((t) => (
+                      <div key={t.id} className="bg-white dark:bg-[#151E32] p-5 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm group hover:shadow-xl transition-all relative overflow-hidden flex flex-col">
+                          <div className="flex items-start justify-between mb-4">
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-900 flex items-center justify-center shrink-0 border border-slate-100 dark:border-slate-800">
+                                      <UserIcon className="w-6 h-6 text-slate-300" />
+                                  </div>
+                                  <div className="min-w-0">
+                                      <h4 className="font-black text-slate-800 dark:text-white text-[11px] uppercase truncate tracking-tight">{(t.name || '').toUpperCase()}</h4>
+                                      <p className="text-[9px] font-mono font-bold text-slate-400 mt-1">{t.nip || '-'}</p>
+                                  </div>
+                              </div>
+                              <span className={`px-2 py-0.5 rounded-md text-[7px] font-black uppercase tracking-tighter ${t.status === 'PNS' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{t.status}</span>
+                          </div>
+                          
+                          <div className="space-y-2 mb-4 flex-1">
+                              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase">
+                                  <BookOpenIcon className="w-3.5 h-3.5 text-indigo-500" />
+                                  <span className="truncate">{t.subject}</span>
+                              </div>
+                              {t.phone && (
+                                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                                      <PhoneIcon className="w-3.5 h-3.5 text-slate-300" />
+                                      {t.phone}
+                                  </div>
+                              )}
+                          </div>
+
+                          {canManage && (
+                              <div className="flex gap-2 pt-4 border-t border-slate-50 dark:border-slate-800/50 mt-auto">
+                                  <button onClick={() => handleEdit(t)} className="flex-1 py-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-indigo-600 flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest transition-all">
+                                      <PencilIcon className="w-3.5 h-3.5" /> Edit
+                                  </button>
+                                  <button onClick={() => handleDelete(t.id || '', t.name)} className="py-2.5 px-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-rose-600 transition-all">
+                                      <TrashIcon className="w-3.5 h-3.5" />
+                                  </button>
+                              </div>
+                          )}
+                      </div>
+                  ))}
               </div>
           ) : (
-              <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
-                  <p className="text-slate-500 dark:text-slate-400">Tidak ada data guru ditemukan untuk filter ini.</p>
+              <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-[3rem] border border-dashed border-slate-200 dark:border-slate-700">
+                  <BriefcaseIcon className="w-16 h-16 text-slate-100 dark:text-slate-700 mx-auto mb-4" />
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tidak ada data guru ditemukan</p>
               </div>
           )}
 
-          {/* Modal - Full Screen Mobile */}
           {isModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/50 backdrop-blur-sm">
-                  <div className="bg-white dark:bg-slate-900 w-full h-full md:h-auto md:max-w-lg md:rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-full md:max-h-[90vh]">
-                      <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                          <h3 className="font-bold text-lg text-slate-800 dark:text-white">
-                              {editingId ? 'Edit Data Guru' : 'Tambah Guru Baru'}
-                          </h3>
-                          <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full">
-                              <XCircleIcon className="w-6 h-6 text-slate-400" />
-                          </button>
+              <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+                  <div className="bg-white dark:bg-[#0B1121] w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh] border border-white/10">
+                      <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center relative z-10">
+                          <div>
+                              <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tight text-base leading-none">{editingId ? 'Edit Data Guru' : 'Tambah Guru Baru'}</h3>
+                              <p className="text-[8px] font-bold text-indigo-500 uppercase mt-2">Database Kepegawaian Digital</p>
+                          </div>
+                          <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><XCircleIcon className="w-6 h-6 text-slate-400" /></button>
                       </div>
-                      
-                      <div className="p-6 overflow-y-auto max-h-[70vh] flex-1">
+                      <div className="p-6 overflow-y-auto scrollbar-hide flex-1 relative z-10">
                           <form id="teacherForm" onSubmit={handleSave} className="space-y-6">
-                              {/* Identitas Section */}
-                              <div className="space-y-4">
-                                  <h4 className="text-xs font-bold text-indigo-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-700 pb-2">Identitas & Profesi</h4>
-                                  
-                                  <div>
-                                      <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Nama Lengkap & Gelar *</label>
-                                      <input 
-                                          required
-                                          type="text" 
-                                          value={formData.name || ''} 
-                                          onChange={e => setFormData({...formData, name: e.target.value})}
-                                          className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                                          placeholder="Contoh: Budi Santoso, S.Pd"
-                                      />
-                                  </div>
-
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                      <div>
-                                          <label className="text-xs font-bold text-slate-500 uppercase block mb-1">NIP / NIY</label>
-                                          <input 
-                                              type="text" 
-                                              value={formData.nip || ''} 
-                                              onChange={e => setFormData({...formData, nip: e.target.value})}
-                                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                                              placeholder="-"
-                                          />
-                                      </div>
-                                      <div>
-                                          <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Tanggal Lahir</label>
-                                          <input 
-                                              type="date" 
-                                              value={formData.birthDate || ''} 
-                                              onChange={e => setFormData({...formData, birthDate: e.target.value})}
-                                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
-                                          />
-                                      </div>
-                                  </div>
-
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                      <div>
-                                          <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Status</label>
-                                          <select 
-                                              value={formData.status || 'PNS'} 
-                                              onChange={e => setFormData({...formData, status: e.target.value as any})}
-                                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                                          >
-                                              <option value="PNS">PNS</option>
-                                              <option value="PPPK">PPPK</option>
-                                              <option value="GTY">GTY</option>
-                                              <option value="Honorer">Honorer</option>
-                                          </select>
-                                      </div>
-                                      <div>
-                                          <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Mata Pelajaran Utama *</label>
-                                          <input 
-                                              required
-                                              type="text" 
-                                              value={formData.subject || ''} 
-                                              onChange={e => setFormData({...formData, subject: e.target.value})}
-                                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                                              placeholder="Contoh: Matematika"
-                                          />
-                                      </div>
+                              <InputField label="Nama Lengkap & Gelar *" icon={UserIcon} value={formData.name} onChange={(v: string) => setFormData({...formData, name: (v || '').toUpperCase()})} placeholder="BUDI SANTOSO, S.PD" />
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                  <InputField label="NIP / NIY" icon={IdentificationIcon} value={formData.nip} onChange={(v: string) => setFormData({...formData, nip: v})} placeholder="1980..." />
+                                  <InputField label="Mata Pelajaran *" icon={BookOpenIcon} value={formData.subject} onChange={(v: string) => setFormData({...formData, subject: (v || '').toUpperCase()})} placeholder="FISIKA" />
+                              </div>
+                              <div className="space-y-1.5">
+                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Status Kepegawaian</label>
+                                  <div className="relative">
+                                      <select value={formData.status || 'PNS'} onChange={e => setFormData({...formData, status: e.target.value as any})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-[11px] font-bold outline-none cursor-pointer appearance-none shadow-inner">
+                                          <option value="PNS">PNS</option>
+                                          <option value="PPPK">PPPK</option>
+                                          <option value="GTY">GTY</option>
+                                          <option value="Honorer">HONORER</option>
+                                      </select>
+                                      <ChevronDownIcon className="absolute right-4 top-3.5 w-4 h-4 text-slate-400" />
                                   </div>
                               </div>
-
-                              {/* Kontak Section */}
-                              <div className="space-y-4">
-                                  <h4 className="text-xs font-bold text-indigo-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-700 pb-2">Kontak & Alamat</h4>
-                                  
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                      <div>
-                                          <label className="text-xs font-bold text-slate-500 uppercase block mb-1">No. Telepon</label>
-                                          <input 
-                                              type="tel" 
-                                              value={formData.phone || ''} 
-                                              onChange={e => setFormData({...formData, phone: e.target.value})}
-                                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                                              placeholder="08..."
-                                          />
-                                      </div>
-                                      <div>
-                                          <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Email</label>
-                                          <input 
-                                              type="email" 
-                                              value={formData.email || ''} 
-                                              onChange={e => setFormData({...formData, email: e.target.value})}
-                                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                                              placeholder="nama@email.com"
-                                          />
-                                      </div>
-                                  </div>
-                                  <div>
-                                      <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Alamat Domisili</label>
-                                      <textarea 
-                                          rows={2}
-                                          value={formData.address || ''} 
-                                          onChange={e => setFormData({...formData, address: e.target.value})}
-                                          className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
-                                          placeholder="Jl. ..."
-                                      />
-                                  </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                  <InputField label="No. WhatsApp" icon={PhoneIcon} value={formData.phone} onChange={(v: string) => setFormData({...formData, phone: v})} placeholder="08..." />
+                                  <InputField label="Email Resmi" icon={EnvelopeIcon} value={formData.email} onChange={(v: string) => setFormData({...formData, email: (v || '').toLowerCase()})} placeholder="guru@madrasah.id" />
                               </div>
                           </form>
                       </div>
-
-                      <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex gap-3">
-                          <button 
-                              onClick={() => setIsModalOpen(false)}
-                              className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 transition-colors"
-                          >
-                              Batal
-                          </button>
-                          <button 
-                              type="submit"
-                              form="teacherForm"
-                              className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 dark:shadow-none"
-                          >
-                              Simpan
-                          </button>
+                      <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex gap-3 relative z-10">
+                          <button onClick={() => setIsModalOpen(false)} className="flex-1 py-4 rounded-[1.5rem] bg-slate-50 dark:bg-slate-800 text-slate-500 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">Batal</button>
+                          <button type="submit" form="teacherForm" className="flex-[2] py-4 rounded-[1.5rem] bg-indigo-600 text-white font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"><SaveIcon className="w-4 h-4" /> Simpan Permanen</button>
                       </div>
                   </div>
               </div>
           )}
-
       </div>
     </Layout>
   );
 };
+
+const InputField = ({ label, icon: Icon, value, onChange, placeholder }: any) => (
+    <div className="space-y-1.5">
+      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+      <div className="relative group">
+        <div className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+          <Icon className="w-4 h-4" />
+        </div>
+        <input 
+            type="text" 
+            value={value || ''} 
+            onChange={e => onChange(e.target.value)} 
+            placeholder={placeholder}
+            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 pl-12 pr-4 text-[11px] font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-inner"
+        />
+      </div>
+    </div>
+  );
 
 export default TeacherData;

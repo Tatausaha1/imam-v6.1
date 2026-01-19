@@ -1,4 +1,9 @@
 
+/**
+ * @license
+ * IMAM System - Integrated Madrasah Academic Manager
+ */
+
 import React from 'react';
 
 export enum ViewState {
@@ -33,6 +38,7 @@ export enum ViewState {
   NEWS = 'NEWS',
   MADRASAH_INFO = 'MADRASAH_INFO',
   ADVISOR = 'ADVISOR',
+  SETTINGS = 'SETTINGS',
 }
 
 export enum UserRole {
@@ -57,6 +63,10 @@ export interface MadrasahData {
   website: string;
   kepalaNama: string;
   kepalaNip: string;
+  visi?: string;
+  misi?: string[];
+  akreditasi?: string;
+  photo?: string; // Field baru untuk foto profil/gedung madrasah
 }
 
 export interface StatCard {
@@ -196,3 +206,5 @@ export interface LoginHistoryEntry {
   status: 'Success' | 'Failed';
   ip?: string;
 }
+
+export type AttendanceStatus = 'Hadir' | 'Terlambat' | 'Sakit' | 'Izin' | 'Alpha' | 'Haid';

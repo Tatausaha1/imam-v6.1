@@ -1,3 +1,12 @@
+/**
+ * @license
+ * IMAM System - Integrated Madrasah Academic Manager
+ * Developed by: Akhmad Arifin (Lead Developer & System Architect)
+ * NIP: 19901004 202521 1012
+ * Role: Fullstack & UI/UX Engineer
+ * Description: Mengembangkan solusi teknologi pendidikan untuk efisiensi dan transparansi manajemen madrasah.
+ * Copyright (c) 2025 MAN 1 Hulu Sungai Tengah. All rights reserved.
+ */
 
 import React from 'react';
 import Layout from './Layout';
@@ -35,7 +44,7 @@ const Premium: React.FC<PremiumProps> = ({ onBack }) => {
     {
       title: "Cloud Backup Harian",
       desc: "Data sekolah aman dengan backup otomatis setiap hari ke server cloud.",
-      icon: CloudIcon, // Assuming CloudIcon exists or map to ArrowUpTray
+      icon: CloudIcon, 
       color: "bg-blue-500",
       premium: true
     },
@@ -55,7 +64,6 @@ const Premium: React.FC<PremiumProps> = ({ onBack }) => {
     }
   ];
 
-  // Fallback for CloudIcon if not in Icons.tsx (using standard SVG here just in case)
   const CloudIconLocal = ({ className }: { className?: string }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
@@ -124,11 +132,12 @@ const Premium: React.FC<PremiumProps> = ({ onBack }) => {
                 <h3 className="font-bold text-slate-800 dark:text-white text-lg flex items-center gap-2">
                     Professional <SparklesIcon className="w-4 h-4 text-yellow-500" />
                 </h3>
-                <div className="flex items-baseline gap-1 mt-2 mb-4">
-                    <span className="text-sm font-bold text-slate-500">Rp</span>
-                    <span className="text-3xl font-black text-slate-800 dark:text-white">500rb</span>
-                    <span className="text-xs text-slate-500">/bulan</span>
+                
+                {/* Price section removed as requested */}
+                <div className="mt-2 mb-4 h-[44px] flex items-center">
+                    <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Premium Access</p>
                 </div>
+
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 min-h-[40px]">
                     Solusi lengkap untuk sekolah modern dengan integrasi WA & AI.
                 </p>

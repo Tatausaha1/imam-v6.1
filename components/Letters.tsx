@@ -10,7 +10,9 @@ import { QRCodeSVG } from 'qrcode.react';
 import { 
   EnvelopeIcon, PlusIcon, CheckCircleIcon, ClockIcon, XCircleIcon, 
   ArrowPathIcon, FileText, TrashIcon, UserIcon, ArrowRightIcon,
-  ShieldCheckIcon, BriefcaseIcon, SparklesIcon, PrinterIcon
+  ShieldCheckIcon, BriefcaseIcon, SparklesIcon, PrinterIcon,
+  // Fix: Added missing Loader2 import
+  Loader2
 } from './Icons';
 
 interface LettersProps {
@@ -59,7 +61,6 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
 
     if (isMockMode) {
         setTimeout(() => {
-            // Simulated Data
             setLetters([
                 { 
                     id: '1', 
@@ -153,12 +154,9 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
       }
   };
 
-  // --- WORKFLOW ACTIONS ---
-
   const handleUpdateStatus = async (newStatus: LetterStatus) => {
       if (!selectedLetter) return;
       
-      // Validation Logic per role
       if (newStatus === 'Verified' && !letterNumber) {
           toast.error("Nomor surat wajib diisi oleh Tata Usaha.");
           return;
@@ -168,13 +166,12 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
       try {
           const updatePayload: Partial<LetterRequest> = {
               status: newStatus,
-              adminNote: adminNote // Optional note at any stage
+              adminNote: adminNote 
           };
 
           const user = auth?.currentUser;
           const actorName = user?.displayName || 'System';
 
-          // Audit Trail Updates
           if (newStatus === 'Verified') {
               updatePayload.letterNumber = letterNumber;
               updatePayload.verifiedBy = actorName;
@@ -185,7 +182,6 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
           } else if (newStatus === 'Signed') {
               updatePayload.signedBy = actorName;
               updatePayload.signedAt = new Date().toISOString();
-              // Generate Hash for QR
               updatePayload.digitalSignatureHash = `SIGNED-${selectedLetter.id}-${Date.now()}`; 
           }
 
@@ -224,9 +220,9 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
   const getStatusIcon = (status: LetterStatus) => {
       switch(status) {
           case 'Pending': return <ClockIcon className="w-3.5 h-3.5" />;
-          case 'Verified': return <FileText className="w-3.5 h-3.5" />; // Document checked
-          case 'Validated': return <ShieldCheckIcon className="w-3.5 h-3.5" />; // Tech valid
-          case 'Signed': return <CheckCircleIcon className="w-3.5 h-3.5" />; // Final
+          case 'Verified': return <FileText className="w-3.5 h-3.5" />; 
+          case 'Validated': return <ShieldCheckIcon className="w-3.5 h-3.5" />; 
+          case 'Signed': return <CheckCircleIcon className="w-3.5 h-3.5" />; 
           case 'Ditolak': return <XCircleIcon className="w-3.5 h-3.5" />;
       }
   };
@@ -260,7 +256,8 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
       actions={
           <button 
               onClick={handleCreate}
-              className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 dark:shadow-none"
+              disabled={loading}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${loading ? 'bg-slate-100 text-slate-300' : 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-indigo-700'}`}
           >
               <PlusIcon className="w-4 h-4" /> Ajukan
           </button>
@@ -268,7 +265,6 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
     >
       <div className="p-4 lg:p-6 pb-24 space-y-6">
           
-          {/* Filters */}
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
               {['All', 'Pending', 'Verified', 'Validated', 'Signed', 'Ditolak'].map((status) => (
                   <button
@@ -285,11 +281,10 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
               ))}
           </div>
 
-          {/* List */}
           {loading ? (
-              <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                  <ArrowPathIcon className="w-8 h-8 animate-spin mb-3" />
-                  <p className="text-sm">Memuat data surat...</p>
+              <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-indigo-500 opacity-20" />
+                  <p className="text-[10px] font-black uppercase tracking-widest">Sinkronisasi PTSP...</p>
               </div>
           ) : filteredLetters.length > 0 ? (
               <div className="grid grid-cols-1 gap-3">
@@ -347,12 +342,10 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
               </div>
           )}
 
-          {/* Modal Detail & Create */}
           {isModalOpen && (
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                   <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
                       
-                      {/* Modal Header */}
                       <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 z-10">
                           <h3 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2">
                               {viewMode === 'create' ? <PlusIcon className="w-5 h-5 text-indigo-500"/> : <FileText className="w-5 h-5 text-indigo-500"/>}
@@ -394,7 +387,6 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
                               </form>
                           ) : selectedLetter ? (
                               <div className="space-y-6">
-                                  {/* Info Utama */}
                                   <div className="flex justify-between items-start">
                                       <div>
                                           <h4 className="font-bold text-slate-800 dark:text-white text-base">{selectedLetter.type}</h4>
@@ -410,7 +402,6 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
                                               )}
                                           </div>
                                       </div>
-                                      {/* QR Code if Signed */}
                                       {selectedLetter.status === 'Signed' && (
                                           <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
                                               <QRCodeSVG value={`IMAM-VALID-${selectedLetter.digitalSignatureHash}`} size={64} />
@@ -418,11 +409,9 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
                                       )}
                                   </div>
 
-                                  {/* Workflow Timeline */}
                                   <div className="border-t border-b border-slate-100 dark:border-slate-800 py-6">
                                       <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Status Workflow</h5>
                                       <div className="relative">
-                                          {/* Vertical Line */}
                                           <div className="absolute left-[15px] top-4 bottom-4 w-0.5 bg-slate-100 dark:bg-slate-800 -z-10"></div>
                                           
                                           <TimelineItem 
@@ -456,9 +445,6 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
                                       </div>
                                   </div>
 
-                                  {/* Action Panels based on Role */}
-                                  
-                                  {/* 1. Tata Usaha Action (Pending -> Verified) */}
                                   {isTU && selectedLetter.status === 'Pending' && (
                                       <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-xl border border-orange-100 dark:border-orange-800">
                                           <h5 className="text-xs font-bold text-orange-700 dark:text-orange-400 uppercase mb-3 flex items-center gap-2">
@@ -484,7 +470,6 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
                                       </div>
                                   )}
 
-                                  {/* 2. Validator/Waka Action (Verified -> Validated) */}
                                   {isValidator && selectedLetter.status === 'Verified' && (
                                       <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
                                           <h5 className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase mb-3 flex items-center gap-2">
@@ -502,7 +487,6 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
                                       </div>
                                   )}
 
-                                  {/* 3. Signer/Kamad Action (Validated -> Signed) */}
                                   {isSigner && selectedLetter.status === 'Validated' && (
                                       <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800">
                                           <h5 className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase mb-3 flex items-center gap-2">
@@ -520,14 +504,12 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
                                       </div>
                                   )}
 
-                                  {/* Final State for Applicant */}
                                   {selectedLetter.status === 'Signed' && (
                                       <button className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-200 dark:shadow-none">
                                           <PrinterIcon className="w-4 h-4" /> Download Dokumen Sah
                                       </button>
                                   )}
 
-                                  {/* Final State for Rejected */}
                                   {selectedLetter.status === 'Ditolak' && (
                                       <div className="p-4 bg-red-50 text-red-600 rounded-xl text-center text-sm font-bold border border-red-100">
                                           Permohonan Ditolak
@@ -538,7 +520,6 @@ const Letters: React.FC<LettersProps> = ({ onBack, userRole }) => {
                           ) : null}
                       </div>
 
-                      {/* Modal Footer */}
                       <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex gap-3 bg-white dark:bg-slate-900 z-10">
                           {viewMode === 'create' ? (
                               <>

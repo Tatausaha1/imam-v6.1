@@ -30,11 +30,6 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 
-interface ProfileProps {
-  onBack: () => void;
-  onLogout: () => void;
-}
-
 interface UserProfile {
   displayName: string;
   email: string;
@@ -42,6 +37,7 @@ interface UserProfile {
   photoURL?: string;
   nip?: string;
   nisn?: string;
+  idUnik?: string;
   uid: string;
   phone?: string;
   class?: string;
@@ -58,6 +54,12 @@ interface Notification {
   title: string;
   date: string;
   type: 'alert' | 'info' | 'success';
+}
+
+// Added missing ProfileProps interface definition
+interface ProfileProps {
+  onBack: () => void;
+  onLogout: () => void;
 }
 
 const Profile: React.FC<ProfileProps> = ({ onBack, onLogout }) => {
@@ -102,6 +104,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, onLogout }) => {
             role: storedRole,
             nip: storedRole === 'SISWA' ? '-' : '19850101 201001 1 001',
             nisn: storedRole === 'SISWA' ? '0086806447' : '-',
+            idUnik: storedRole === 'SISWA' ? '15012' : undefined,
             phone: '081234567890',
             class: storedRole === 'SISWA' ? 'XII IPA 1' : storedRole === 'GTK' ? 'Wali Kelas X IPA 1' : 'Staff TU',
             address: 'Jl. Merdeka No. 45, Barabai',
@@ -137,6 +140,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, onLogout }) => {
                             const studentData = studentDoc.data();
                             // Merge student data into profile view, prioritizing fresh data from student doc
                             additionalData.nisn = studentData?.nisn || additionalData.nisn;
+                            additionalData.idUnik = studentData?.idUnik || additionalData.idUnik;
                             additionalData.class = studentData?.tingkatRombel || additionalData.class;
                             additionalData.address = studentData?.alamat || additionalData.address;
                             additionalData.phone = studentData?.noTelepon || additionalData.phone;
@@ -332,7 +336,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, onLogout }) => {
     }
   };
 
-  const getInitials = (name: string) => name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+  const getInitials = (name: string) => (name || '?').split(' ').map(n => n ? n[0] : '').slice(0, 2).join('').toUpperCase();
   const theme = profile ? getRoleTheme(profile.role) : getRoleTheme('GTK');
 
   const InfoItem = ({ icon: Icon, label, value }: { icon: any, label: string, value: string }) => (
@@ -375,6 +379,9 @@ const Profile: React.FC<ProfileProps> = ({ onBack, onLogout }) => {
   const innerStyle = { transformStyle: 'preserve-3d' as const, transition: 'transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275)', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' };
   const frontStyle = { backfaceVisibility: 'hidden' as const, WebkitBackfaceVisibility: 'hidden' as const, position: 'absolute' as const, top: 0, left: 0, width: '100%', height: '100%' };
   const backStyle = { ...frontStyle, transform: 'rotateY(180deg)' };
+
+  // DATA QR UNTUK SCANNER: Hanya gunakan idUnik secara ketat sesuai permintaan
+  const qrValue = profile?.idUnik || "000";
 
   return (
     <Layout title="Profil Saya" subtitle="Identitas & Notifikasi Personal" icon={UserIcon} onBack={onBack}>
@@ -438,9 +445,14 @@ const Profile: React.FC<ProfileProps> = ({ onBack, onLogout }) => {
                                         </div>
                                         <h2 className="font-extrabold text-slate-900 text-sm uppercase leading-tight mb-2 px-1 line-clamp-2">{profile.displayName}</h2>
                                         <span className={`text-[9px] font-bold uppercase tracking-wider mb-6 px-3 py-1 rounded-md ${theme.bgLight} ${theme.text}`}>{theme.label}</span>
-                                        <div className="mt-auto bg-white p-2 rounded-xl shadow-sm border border-slate-100"><QRCodeSVG value={profile.studentId || profile.uid} size={90} level="M" /></div>
+                                        
+                                        {/* QR CODE REALTIME - Menggunakan idUnik untuk presensi (Ketat tanpa fallback) */}
+                                        <div className="mt-auto bg-white p-2 rounded-xl shadow-sm border border-slate-100">
+                                            <QRCodeSVG value={qrValue} size={90} level="M" />
+                                        </div>
+                                        
                                         <p className="text-[8px] text-slate-400 mt-2 font-medium">Scan untuk Presensi</p>
-                                        <p className="text-[9px] font-mono text-slate-400 mt-1 font-bold tracking-widest">{profile.studentId || profile.nip || profile.nisn || profile.uid.substring(0, 10)}</p>
+                                        <p className="text-[9px] font-mono text-slate-400 mt-1 font-bold tracking-widest">{qrValue}</p>
                                     </div>
                                     <div className={`h-2 ${theme.cardHeader} w-full`}></div>
                                 </div>

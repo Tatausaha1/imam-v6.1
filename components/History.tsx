@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import Layout from './Layout';
 import { 
@@ -8,6 +7,7 @@ import {
   EnvelopeIcon, 
   BanknotesIcon, 
   Loader2,
+  HeartIcon
 } from './Icons';
 import { db, auth, isMockMode } from '../services/firebase';
 import { UserRole } from '../types';
@@ -19,11 +19,11 @@ interface HistoryProps {
 
 interface HistoryItem {
     id: string;
-    type: 'attendance' | 'letter' | 'payment';
+    type: 'attendance' | 'letter' | 'payment' | 'haid';
     date: string; // ISO string
     title: string;
     subtitle: string;
-    status: 'success' | 'pending' | 'warning' | 'error';
+    status: 'success' | 'pending' | 'warning' | 'error' | 'haid';
     amount?: string;
     meta?: any;
 }
@@ -58,6 +58,7 @@ const History: React.FC<HistoryProps> = ({ onBack, userRole }) => {
                 // Mock Attendance
                 allItems.push(
                     { id: 'att-1', type: 'attendance', date: new Date().toISOString(), title: 'Absensi Masuk', subtitle: '07:15 - Tepat Waktu', status: 'success' },
+                    { id: 'att-h', type: 'haid', date: new Date().toISOString(), title: 'Ibadah (Mode Haid)', subtitle: 'Pencatatan Khusus Siswi', status: 'haid' },
                     { id: 'att-2', type: 'attendance', date: new Date(Date.now() - 86400000).toISOString(), title: 'Absensi Pulang', subtitle: '16:00 - Selesai', status: 'success' }
                 );
                 // Mock Letters
@@ -82,25 +83,21 @@ const History: React.FC<HistoryProps> = ({ onBack, userRole }) => {
 
             // A. QUERY ATTENDANCE (Kehadiran)
             let attQuery = db.collection('attendance').orderBy('date', 'desc').limit(20);
-            if (!isAdminOrStaff) {
-                // Siswa hanya melihat data sendiri (asumsi studentId == uid atau linked)
-                // Note: Jika struktur data belum sempurna menghubungkan uid, query ini mungkin kosong untuk siswa
-                // Idealnya: .where('studentId', '==', uid)
-                // Untuk demo, kita ambil umum dulu jika filter gagal, atau filter di client side
-            }
             promises.push(attQuery.get().then(snap => {
                 snap.docs.forEach(doc => {
                     const data = doc.data();
                     // Filter sisi klien untuk keamanan sederhana di view list campuran
                     if (!isAdminOrStaff && data.studentId !== uid && data.userId !== uid) return;
 
+                    const isHaidStatus = data.status === 'Haid';
+
                     allItems.push({
                         id: doc.id,
-                        type: 'attendance',
+                        type: isHaidStatus ? 'haid' : 'attendance',
                         date: data.date + (data.checkIn ? 'T' + data.checkIn : ''), // Combine date+time estimate
-                        title: data.status === 'Hadir' ? `Hadir: ${data.studentName || 'Siswa'}` : `${data.status}: ${data.studentName}`,
-                        subtitle: data.checkIn ? `Masuk Pukul ${data.checkIn.substring(0,5)}` : 'Tidak ada data jam',
-                        status: data.status === 'Hadir' ? 'success' : data.status === 'Terlambat' ? 'warning' : 'error'
+                        title: isHaidStatus ? `Ibadah: ${data.studentName || 'Siswa'} (Haid)` : (data.status === 'Hadir' ? `Hadir: ${data.studentName || 'Siswa'}` : `${data.status}: ${data.studentName}`),
+                        subtitle: isHaidStatus ? 'Tercatat dalam Mode Haid' : (data.checkIn ? `Masuk Pukul ${data.checkIn.substring(0,5)}` : 'Tidak ada data jam'),
+                        status: isHaidStatus ? 'haid' : (data.status === 'Hadir' ? 'success' : data.status === 'Terlambat' ? 'warning' : 'error')
                     });
                 });
             }));
@@ -131,16 +128,11 @@ const History: React.FC<HistoryProps> = ({ onBack, userRole }) => {
                 });
             }));
 
-            // C. QUERY PAYMENTS (Pembayaran - Tabel Baru)
-            // Mengambil data dari koleksi 'payments' yang dibuat di DeveloperConsole
+            // C. QUERY PAYMENTS (Pembayaran)
             let payQuery = db.collection('payments').limit(20); 
-            // Note: Payments mungkin belum punya field timestamp standar, kita pakai field 'date' atau fallback
-            
             promises.push(payQuery.get().then(snap => {
                 snap.docs.forEach(doc => {
                     const data = doc.data();
-                    // Filter permission manual jika field userId belum ada di payments (karena data dummy)
-                    // Jika admin tampilkan semua, jika siswa tampilkan yang namanya cocok (fallback logic)
                     if (!isAdminOrStaff && auth?.currentUser?.displayName && data.studentName !== auth.currentUser.displayName) return;
 
                     let status: HistoryItem['status'] = 'success';
@@ -150,7 +142,7 @@ const History: React.FC<HistoryProps> = ({ onBack, userRole }) => {
                     allItems.push({
                         id: doc.id,
                         type: 'payment',
-                        date: data.date || new Date().toISOString(), // Fallback date
+                        date: data.date || new Date().toISOString(), 
                         title: `${data.type} (${data.month || '-'})`,
                         subtitle: data.studentName,
                         status: status,
@@ -182,10 +174,13 @@ const History: React.FC<HistoryProps> = ({ onBack, userRole }) => {
 
   const filteredItems = useMemo(() => {
       if (activeTab === 'all') return items;
+      // Filter attendance includes haid records for attendance tab
+      if (activeTab === 'attendance') return items.filter(i => i.type === 'attendance' || i.type === 'haid');
       return items.filter(i => i.type === activeTab);
   }, [items, activeTab]);
 
   const getIcon = (type: string, status: string) => {
+      if (status === 'haid' || type === 'haid') return <HeartIcon className="w-5 h-5 text-rose-600 fill-current" />;
       if (type === 'payment') return <BanknotesIcon className="w-5 h-5 text-emerald-600" />;
       if (type === 'letter') return <EnvelopeIcon className="w-5 h-5 text-blue-600" />;
       // Attendance
@@ -195,6 +190,7 @@ const History: React.FC<HistoryProps> = ({ onBack, userRole }) => {
   };
 
   const getBgColor = (type: string, status: string) => {
+      if (status === 'haid' || type === 'haid') return 'bg-rose-50 dark:bg-rose-900/20';
       if (type === 'payment') return 'bg-emerald-50 dark:bg-emerald-900/20';
       if (type === 'letter') return 'bg-blue-50 dark:bg-blue-900/20';
       if (status === 'success') return 'bg-teal-50 dark:bg-teal-900/20';
@@ -265,7 +261,7 @@ const History: React.FC<HistoryProps> = ({ onBack, userRole }) => {
                             {/* Content */}
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-start">
-                                    <h4 className="font-bold text-slate-800 dark:text-white text-sm line-clamp-1">
+                                    <h4 className="font-bold text-slate-800 dark:text-white text-sm line-clamp-1 uppercase tracking-tight">
                                         {item.title}
                                     </h4>
                                     <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap ml-2">
@@ -273,10 +269,10 @@ const History: React.FC<HistoryProps> = ({ onBack, userRole }) => {
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-end mt-0.5">
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 font-medium">
                                         {item.subtitle}
                                     </p>
-                                    {timeStr && item.type === 'attendance' && (
+                                    {timeStr && (item.type === 'attendance' || item.type === 'haid') && (
                                         <span className="text-[10px] font-mono text-slate-400">{timeStr}</span>
                                     )}
                                 </div>
@@ -296,7 +292,7 @@ const History: React.FC<HistoryProps> = ({ onBack, userRole }) => {
                 <div className="w-12 h-12 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
                     <ClockIcon className="w-6 h-6" />
                 </div>
-                <p className="text-slate-500 dark:text-slate-400 text-sm">Belum ada riwayat tercatat.</p>
+                <p className="text-slate-500 dark:text-slate-400 text-sm font-bold uppercase tracking-widest">Belum ada riwayat tercatat.</p>
             </div>
         )}
 

@@ -1,24 +1,32 @@
 
-import React, { useState, useEffect } from 'react';
+/**
+ * @license
+ * IMAM System - Integrated Madrasah Academic Manager
+ */
+
+import React, { useState, useEffect, useMemo } from 'react';
 import Layout from './Layout';
 import { 
   ChartBarIcon, UsersGroupIcon, CheckCircleIcon, 
   CalendarIcon, BuildingLibraryIcon, ArrowRightIcon,
   FileSpreadsheet, Loader2, ChevronDownIcon,
-  PrinterIcon, ClockIcon, XCircleIcon, SparklesIcon
+  PrinterIcon, ClockIcon, XCircleIcon, SparklesIcon,
+  HeartIcon, UserIcon
 } from './Icons';
 import { db, isMockMode } from '../services/firebase';
 import { format } from 'date-fns';
-import { id as localeID } from 'date-fns/locale';
+import { id as localeID } from 'date-fns/locale/id'; 
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
-import { Student } from '../types';
+import { Student, MadrasahData } from '../types';
 
 interface AttendanceRecord {
     studentId: string;
     studentName: string;
+    idUnik: string;
+    jenisKelamin: string;
     class: string;
     date: string;
     status: string;
@@ -29,194 +37,267 @@ interface AttendanceRecord {
     checkOut: string | null;
 }
 
+interface ClassInfo {
+    name: string;
+    teacherName?: string;
+    captainName?: string;
+}
+
 const Reports: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const [activeReport, setActiveReport] = useState<'menu' | 'attendance'>('menu');
     const [loading, setLoading] = useState(false);
     
-    // Parameters
     const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
     const [selectedClass, setSelectedClass] = useState<string>('All');
     
-    // Data Source
-    const [classes, setClasses] = useState<string[]>([]);
+    const [classes, setClasses] = useState<ClassInfo[]>([]);
     const [allStudents, setAllStudents] = useState<Student[]>([]);
     const [exportData, setExportData] = useState<AttendanceRecord[]>([]);
+    const [madrasahInfo, setMadrasahInfo] = useState<MadrasahData | null>(null);
 
     useEffect(() => {
-        if (isMockMode) {
-            setClasses(['X IPA 1', 'X IPA 2', 'XI IPS 1', 'XII AGAMA']);
-            setAllStudents([
-                { id: '1', namaLengkap: 'AHMAD DAHLAN', tingkatRombel: 'X IPA 1', status: 'Aktif' } as Student,
-                { id: '2', namaLengkap: 'SITI AMINAH', tingkatRombel: 'X IPA 1', status: 'Aktif' } as Student,
-                { id: '3', namaLengkap: 'BUDI SANTOSO', tingkatRombel: 'X IPA 2', status: 'Aktif' } as Student,
-            ]);
-            return;
-        }
-        if (db) {
-            db.collection('classes').get().then(snap => {
-                setClasses(snap.docs.map(d => d.data().name).sort());
-            });
-            db.collection('students').where('status', '==', 'Aktif').get().then(snap => {
-                setAllStudents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Student)));
-            });
-        }
+        const loadInitial = async () => {
+            setLoading(true);
+            if (isMockMode) {
+                setClasses([
+                    { name: 'X IPA 1', teacherName: 'Budi Santoso, S.Pd', captainName: 'Ahmad Dahlan' },
+                    { name: 'XII IPA 1', teacherName: 'H. Abdul Ghani', captainName: 'Adelia Sri' }
+                ]);
+                setAllStudents([
+                    { id: '1', namaLengkap: 'AHMAD DAHLAN', idUnik: '15012', tingkatRombel: 'X IPA 1', status: 'Aktif', jenisKelamin: 'Laki-laki' } as Student,
+                    { id: '2', namaLengkap: 'ADELIA SRI', idUnik: '15013', tingkatRombel: 'XII IPA 1', status: 'Aktif', jenisKelamin: 'Perempuan' } as Student,
+                ]);
+                setMadrasahInfo({
+                    nama: 'MAN 1 HULU SUNGAI TENGAH',
+                    kepalaNama: 'Drs. H. Syamsul Arifin',
+                    kepalaNip: '196808171995031002',
+                    alamat: 'Jl. H. Damanhuri No. 12 Barabai',
+                    nsm: '131163070001',
+                    npsn: '30315354',
+                    telepon: '0517-41234',
+                    email: 'info@man1hst.sch.id',
+                    website: 'www.man1hst.sch.id'
+                });
+                setLoading(false);
+                return;
+            }
+            if (db) {
+                db.collection('classes').get().then(snap => {
+                    setClasses(snap.docs.map(d => ({
+                        name: d.data().name,
+                        teacherName: d.data().teacherName,
+                        captainName: d.data().captainName
+                    } as ClassInfo)).sort((a,b) => a.name.localeCompare(b.name)));
+                });
+                db.collection('students').where('status', '==', 'Aktif').get().then(snap => {
+                    setAllStudents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Student)));
+                });
+                db.collection('settings').doc('madrasahInfo').get().then(doc => {
+                    if (doc.exists) setMadrasahInfo(doc.data() as MadrasahData);
+                });
+                setLoading(false);
+            }
+        };
+        loadInitial();
     }, []);
 
     useEffect(() => {
         if (activeReport !== 'attendance') return;
-        
         const prepareData = async () => {
             setLoading(true);
             try {
-                let attendanceRecords: AttendanceRecord[] = [];
-
+                let attendanceRecords: any[] = [];
                 if (isMockMode) {
                     attendanceRecords = [
-                        { studentId: '1', studentName: 'AHMAD DAHLAN', class: 'X IPA 1', date: selectedDate, status: 'Hadir', checkIn: '07:15', duha: '09:30', zuhur: '12:30', ashar: '15:45', checkOut: '16:00' },
+                        { studentId: '2', studentName: 'ADELIA SRI', class: 'XII IPA 1', date: selectedDate, status: 'Haid', checkIn: '07:15', duha: 'Haid', zuhur: 'Haid', ashar: 'Haid', checkOut: '16:00' },
+                        { studentId: '1', studentName: 'AHMAD DAHLAN', class: 'X IPA 1', date: selectedDate, status: 'Hadir', checkIn: '07:10', duha: '09:00', zuhur: '12:00', ashar: '15:00', checkOut: '16:00' },
                     ];
                 } else if (db) {
                     let query = db.collection('attendance').where('date', '==', selectedDate);
                     if (selectedClass !== 'All') query = query.where('class', '==', selectedClass);
                     const snap = await query.get();
-                    attendanceRecords = snap.docs.map(d => d.data() as AttendanceRecord);
+                    attendanceRecords = snap.docs.map(d => d.data());
                 }
-
                 const studentsInClass = allStudents.filter(s => selectedClass === 'All' || s.tingkatRombel === selectedClass);
                 const attMap = new Map(attendanceRecords.map(r => [r.studentId, r]));
-
-                const finalData = studentsInClass.map(student => {
-                    const rec = attMap.get(student.id!);
-                    if (rec) return rec;
-                    return {
-                        studentId: student.id!,
-                        studentName: student.namaLengkap,
-                        class: student.tingkatRombel,
-                        date: selectedDate,
-                        status: 'Alpha',
-                        checkIn: null, duha: null, zuhur: null, ashar: null, checkOut: null
-                    } as AttendanceRecord;
-                });
-
-                setExportData(finalData);
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
+                setExportData(studentsInClass.map(s => {
+                    const rec = attMap.get(s.id!);
+                    return { studentId: s.id!, studentName: s.namaLengkap || 'Siswa', idUnik: s.idUnik || s.nisn || '-', jenisKelamin: s.jenisKelamin || '-', class: s.tingkatRombel, date: selectedDate, status: rec ? rec.status : 'Alpha', checkIn: rec ? rec.checkIn : null, duha: rec ? rec.duha : null, zuhur: rec ? rec.zuhur : null, ashar: rec ? rec.ashar : null, checkOut: rec ? rec.checkOut : null };
+                }));
+            } finally { setLoading(false); }
         };
-
         prepareData();
     }, [selectedDate, selectedClass, activeReport, allStudents]);
 
-    const handleExport = async (formatType: 'pdf' | 'excel') => {
-        if (exportData.length === 0) {
-            toast.error("Tidak ada data untuk diekspor.");
-            return;
-        }
+    // Helper load image logo
+    const getLogoBase64 = (): Promise<string> => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous'; // CRITICAL
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width; canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0);
+                try {
+                    resolve(canvas.toDataURL('image/png'));
+                } catch (e) {
+                    resolve('');
+                }
+            };
+            img.onerror = () => resolve('');
+            img.src = 'https://lh3.googleusercontent.com/d/1kYplV_NYloChk77ggGNGOoBb-D3Nv7nJ';
+        });
+    };
 
-        const toastId = toast.loading(`Menghasilkan ${formatType.toUpperCase()}...`);
-        
+    const handleExport = async (formatType: 'pdf' | 'excel') => {
+        if (loading) { toast.error("Database sedang sinkronisasi..."); return; }
+        if (exportData.length === 0) { toast.error("Tidak ada data."); return; }
+        const toastId = toast.loading(`Menghasilkan ${formatType.toUpperCase()} Resmi...`);
         try {
             if (formatType === 'pdf') {
                 const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-                const targetClasses = selectedClass === 'All' 
-                    ? Array.from(new Set(exportData.map(r => r.class))).sort()
-                    : [selectedClass];
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const centerX = pageWidth / 2;
+                const margin = 15;
+                const dateHeader = format(new Date(selectedDate), 'EEEE, dd MMMM yyyy', { locale: localeID });
+                
+                // PRE-LOAD LOGO
+                const logoData = await getLogoBase64();
 
-                targetClasses.forEach((className, index) => {
-                    if (index > 0) doc.addPage();
-                    doc.setFontSize(12);
+                const classGroups = new Map<string, AttendanceRecord[]>();
+                exportData.forEach(r => { const cls = r.class || 'Umum'; if (!classGroups.has(cls)) classGroups.set(cls, []); classGroups.get(cls)!.push(r); });
+                const targetClasses = selectedClass === 'All' ? Array.from(classGroups.keys()).sort() : [selectedClass];
+
+                targetClasses.forEach((className, idx) => {
+                    const classData = classGroups.get(className);
+                    if (!classData) return;
+                    if (idx > 0) doc.addPage();
+                    
+                    // Hitung Gender
+                    const mCount = classData.filter(c => c.jenisKelamin === 'Laki-laki').length;
+                    const fCount = classData.filter(c => c.jenisKelamin === 'Perempuan').length;
+
+                    // --- KOP SURAT RESMI ---
+                    if (logoData) {
+                        doc.addImage(logoData, 'PNG', margin, 8, 18, 18);
+                    }
+
                     doc.setFont("helvetica", "bold");
-                    doc.text("LAPORAN HARIAN KEHADIRAN & IBADAH SISWA", 105, 15, { align: "center" });
                     doc.setFontSize(10);
+                    doc.text("KEMENTERIAN AGAMA REPUBLIK INDONESIA", centerX + 10, 12, { align: "center" });
+                    doc.setFontSize(11);
+                    doc.text("KANTOR KEMENTERIAN AGAMA KABUPATEN HULU SUNGAI TENGAH", centerX + 10, 17, { align: "center" });
+                    doc.setFontSize(12);
+                    doc.text((madrasahInfo?.nama || "MAN 1 HULU SUNGAI TENGAH").toUpperCase(), centerX + 10, 22, { align: "center" });
+                    doc.setFontSize(8);
                     doc.setFont("helvetica", "normal");
-                    doc.text("MAN 1 HULU SUNGAI TENGAH", 105, 20, { align: "center" });
-                    doc.setLineWidth(0.5);
-                    doc.line(15, 24, 195, 24);
-                    doc.setFontSize(9);
-                    doc.text(`TANGGAL : ${format(new Date(selectedDate), 'dd MMMM yyyy', { locale: localeID })}`, 15, 30);
-                    doc.text(`KELAS   : ${className.toUpperCase()}`, 15, 35);
-                    const classData = exportData.filter(r => r.class === className).sort((a,b) => a.studentName.localeCompare(b.studentName));
+                    doc.text(`${madrasahInfo?.alamat || "-"}`, centerX + 10, 26, { align: "center" });
+                    
+                    doc.setLineWidth(0.6);
+                    doc.line(margin, 28, pageWidth - margin, 28);
+                    doc.setLineWidth(0.2);
+                    doc.line(margin, 29, pageWidth - margin, 29);
+
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("REKAPITULASI PRESENSI HARIAN SISWA", centerX, 40, { align: "center" });
+                    doc.setFontSize(8); doc.setFont("helvetica", "normal"); 
+                    doc.text(`Hari / Tanggal : ${dateHeader}`, margin, 50);
+                    doc.text(`Rombel / Kelas : ${className.toUpperCase()}`, margin, 55);
+                    doc.setFont("helvetica", "bold");
+                    doc.text(`Jumlah Siswa  : ${classData.length} (L: ${mCount}, P: ${fCount})`, margin, 60);
+                    doc.setFont("helvetica", "normal");
+
+                    const clsInfo = classes.find(c => c.name === className) || { teacherName: "............................", captainName: "............................" };
+
                     autoTable(doc, {
-                        startY: 42,
-                        head: [['NO', 'NAMA SISWA', 'ST', 'MSK', 'DHA', 'ZHR', 'ASR', 'PLG']],
-                        body: classData.map((r, i) => [
-                            i + 1, r.studentName.toUpperCase(), r.status.substring(0,1),
-                            r.checkIn ? r.checkIn.substring(0,5) : '-', r.duha ? r.duha.substring(0,5) : '-',
-                            r.zuhur ? r.zuhur.substring(0,5) : '-', r.ashar ? r.ashar.substring(0,5) : '-',
-                            r.checkOut ? r.checkOut.substring(0,5) : '-'
+                        startY: 65,
+                        head: [['NO', 'ID UNIK', 'NAMA SISWA', 'JK', 'MSK', 'DHA', 'ZHR', 'ASR', 'PLG', 'KET']],
+                        body: classData.sort((a,b)=>(a.studentName||'').localeCompare(b.studentName||'')).map((r, i) => [
+                            i + 1, r.idUnik, (r.studentName || '').toUpperCase(), r.jenisKelamin === 'Laki-laki' ? 'L' : 'P',
+                            r.checkIn || '-', r.duha || '-', r.zuhur || '-', r.ashar || '-', r.checkOut || '-',
+                            r.status === 'Alpha' ? 'A' : r.status === 'Haid' ? 'HD' : r.status.substring(0,1)
                         ]),
-                        headStyles: { fillColor: [40, 40, 40], halign: 'center', fontSize: 8 },
-                        styles: { fontSize: 7, font: 'helvetica' },
-                        margin: { left: 15, right: 15 }
+                        headStyles: { fillColor: [67, 56, 202], halign: 'center', fontSize: 7, textColor: [255, 255, 255] },
+                        styles: { fontSize: 7, cellPadding: 2 },
+                        didDrawCell: (data) => {
+                            if (data.section === 'body' && data.row.cells[9].text[0] === 'HD') {
+                                doc.setFillColor(255, 241, 242);
+                            }
+                        }
                     });
+
+                    // TTD
+                    const finalY = (doc as any).lastAutoTable.finalY + 15;
+                    if (finalY + 50 < 290) {
+                        doc.setFontSize(8);
+                        doc.text("Barabai, " + format(new Date(), "dd MMMM yyyy", { locale: localeID }), pageWidth - margin - 50, finalY);
+                        
+                        doc.text("Ketua Kelas,", margin + 10, finalY + 5);
+                        doc.text("Wali Rombel,", pageWidth - margin - 50, finalY + 5);
+                        
+                        doc.setFont("helvetica", "bold");
+                        doc.text((clsInfo.captainName || "............................").toUpperCase(), margin + 10, finalY + 25);
+                        doc.text((clsInfo.teacherName || "............................").toUpperCase(), pageWidth - margin - 50, finalY + 25);
+                        
+                        doc.setFont("helvetica", "normal"); doc.text("Mengetahui,", centerX, finalY + 32, { align: 'center' });
+                        doc.setFont("helvetica", "bold"); doc.text("Kepala Madrasah,", centerX, finalY + 37, { align: 'center' });
+                        doc.text((madrasahInfo?.kepalaNama || "Drs. H. Syamsul Arifin").toUpperCase(), centerX, finalY + 55, { align: 'center' });
+                        doc.setFont("helvetica", "normal");
+                        doc.text("NIP. " + (madrasahInfo?.kepalaNip || "196808171995031002"), centerX, finalY + 59, { align: 'center' });
+                    }
                 });
-                doc.save(`LAPORAN_${selectedDate}.pdf`);
+                doc.save(`REKAP_PRESENSI_${selectedDate}.pdf`);
             } else {
-                const worksheet = XLSX.utils.json_to_sheet(exportData.map((r, i) => ({
-                    'No': i + 1, 'Nama Siswa': r.studentName, 'Kelas': r.class, 'Status': r.status,
-                    'Masuk': r.checkIn || '-', 'Duha': r.duha || '-', 'Zuhur': r.zuhur || '-',
-                    'Ashar': r.ashar || '-', 'Pulang': r.checkOut || '-'
-                })));
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
-                XLSX.writeFile(workbook, `REKAP_${selectedDate}.xlsx`);
+                const worksheet = XLSX.utils.json_to_sheet(exportData.map((r, i) => ({ 'No': i + 1, 'Nama Siswa': r.studentName, 'Kelas': r.class, 'Jenis Kelamin': r.jenisKelamin, 'Status': r.status, 'Masuk': r.checkIn || '-', 'Pulang': r.checkOut || '-' })));
+                const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap"); XLSX.writeFile(workbook, `REKAP_${selectedDate}.xlsx`);
             }
-            toast.success("Laporan diunduh!", { id: toastId });
-        } catch (e) {
-            toast.error("Gagal ekspor.", { id: toastId });
-        }
+            toast.success("Berhasil diunduh!", { id: toastId });
+        } catch (e) { toast.error("Gagal memproses laporan.", { id: toastId }); }
     };
 
     return (
-        <Layout
-            title="Pusat Laporan"
-            subtitle="Cetak & Rekapitulasi Digital"
-            icon={ChartBarIcon}
-            onBack={activeReport !== 'menu' ? () => setActiveReport('menu') : onBack}
-        >
+        <Layout title="Pusat Laporan" subtitle="Cetak & Rekapitulasi Digital" icon={ChartBarIcon} onBack={activeReport !== 'menu' ? () => setActiveReport('menu') : onBack}>
             <div className="p-4 lg:p-8 pb-32 max-w-4xl mx-auto">
-                
                 {activeReport === 'menu' ? (
-                    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        {/* Summary Header for Menu */}
-                        <div className="bg-indigo-600 rounded-[2.5rem] p-6 text-white shadow-xl shadow-indigo-500/20 relative overflow-hidden mb-6">
-                            <div className="absolute top-0 right-0 p-8 opacity-10 -rotate-12"><ChartBarIcon className="w-32 h-32" /></div>
-                            <h2 className="text-xl font-black uppercase tracking-tight relative z-10">Laporan Akademik</h2>
-                            <p className="text-xs text-indigo-100 opacity-80 mt-1 relative z-10 font-medium">Pilih jenis data yang ingin Anda rekapitulasi hari ini.</p>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <button 
-                                onClick={() => setActiveReport('attendance')}
-                                className="p-5 bg-white dark:bg-[#151E32] rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm active:scale-95 transition-all text-left group"
-                            >
-                                <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center mb-4 border border-indigo-100 dark:border-indigo-800">
-                                    <UsersGroupIcon className="w-6 h-6" />
-                                </div>
-                                <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">Presensi Harian</h3>
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">Cetak daftar hadir siswa per kelas atau seluruh madrasah.</p>
-                                <div className="mt-6 flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-black text-[9px] uppercase tracking-widest">
-                                    Buka Konfigurasi <ArrowRightIcon className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                                </div>
-                            </button>
-
-                            <button className="p-5 bg-white dark:bg-[#151E32] rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm opacity-60 text-left cursor-not-allowed">
-                                <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-4">
-                                    <ClockIcon className="w-6 h-6" />
-                                </div>
-                                <h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-tight">Laporan Bulanan</h3>
-                                <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-1 leading-relaxed">Statistik persentase kehadiran dalam satu bulan (Segera).</p>
-                            </button>
-                        </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4">
+                        <button onClick={() => setActiveReport('attendance')} className="p-6 bg-white dark:bg-[#151E32] rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm text-left group transition-all active:scale-95">
+                            <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center mb-6"><UsersGroupIcon className="w-8 h-8" /></div>
+                            <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Presensi Harian</h3>
+                            <p className="text-xs text-slate-500 mt-2">Cetak rekapitulasi kehadiran dengan TTD Wali & Ketua Kelas.</p>
+                        </button>
                     </div>
                 ) : (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-                        
-                        {/* --- NEW MOBILE STRUCTURED CONFIG HUB --- */}
-                        <div className="space-y-8">
-                            
-                            {/* Step 1: Data Parameters */}
-                            <div className="relative">
-                                <div className="flex items-center gap-3 mb-5">
-                                    <div className="w
+                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                        <div className="bg-white dark:bg-[#151E32] p-6 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="bg-slate-50 dark:bg-slate-900 border border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 text-xs font-bold" />
+                                <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)} className="bg-slate-50 dark:bg-slate-900 border border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 text-xs font-bold uppercase">
+                                    <option value="All">Semua Rombel</option>
+                                    {classes.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button 
+                                    onClick={() => handleExport('excel')} 
+                                    disabled={loading}
+                                    className={`flex items-center justify-center gap-3 p-4 rounded-2xl font-black text-[10px] uppercase border ${loading ? 'bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed opacity-50' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}
+                                >
+                                    <FileSpreadsheet className="w-5 h-5"/> EXCEL
+                                </button>
+                                <button 
+                                    onClick={() => handleExport('pdf')} 
+                                    disabled={loading}
+                                    className={`flex items-center justify-center gap-3 p-4 rounded-2xl font-black text-[10px] uppercase shadow-lg ${loading ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50' : 'bg-indigo-600 text-white'}`}
+                                >
+                                    <PrinterIcon className="w-5 h-5"/> PDF RESMI
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </Layout>
+    );
+};
+
+export default Reports;
