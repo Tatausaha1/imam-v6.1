@@ -39,6 +39,10 @@ export enum ViewState {
   MADRASAH_INFO = 'MADRASAH_INFO',
   ADVISOR = 'ADVISOR',
   SETTINGS = 'SETTINGS',
+  PUSAKA = 'PUSAKA',
+  GUIDE = 'GUIDE',
+  // Added missing POINTS ViewState
+  POINTS = 'POINTS',
 }
 
 export enum UserRole {
@@ -66,32 +70,19 @@ export interface MadrasahData {
   visi?: string;
   misi?: string[];
   akreditasi?: string;
-  photo?: string; // Field baru untuk foto profil/gedung madrasah
+  photo?: string;
 }
 
-export interface StatCard {
-  title: string;
-  value: string;
-  change?: string;
-  icon: React.ReactNode;
-  color: string;
-}
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'model';
-  text: string;
-  timestamp: Date;
-}
-
-export interface NotificationItem {
-  id: string;
-  title: string;
-  message: string;
-  type: 'surat' | 'cuti' | 'info' | 'alert';
-  timestamp: Date;
-  read: boolean;
-  link?: ViewState;
+export interface ClassData {
+    id?: string;
+    name: string;
+    level: string; 
+    teacherId?: string; 
+    teacherName?: string;
+    academicYear: string;
+    captainId?: string;
+    captainName?: string;
+    subjects?: string[];
 }
 
 export interface Student {
@@ -118,6 +109,35 @@ export interface Student {
   namaWali?: string;
   accountStatus?: string;
   linkedUserId?: string;
+  // Added missing discipline points field
+  disciplinePoints?: number;
+}
+
+export type AttendanceStatus = 'Hadir' | 'Terlambat' | 'Sakit' | 'Izin' | 'Alpha' | 'Haid';
+
+export interface AttendanceRecord {
+    id: string;
+    studentId: string;
+    studentName: string;
+    gender?: string;
+    class: string;
+    date: string;
+    status: AttendanceStatus;
+    // 3 Sesi Terintegrasi
+    masukDuha: string | null;
+    zuhur: string | null;
+    asharPulang: string | null;
+}
+
+/**
+ * Added missing exports used across components
+ */
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  text: string;
+  timestamp: Date;
 }
 
 export interface Teacher {
@@ -126,10 +146,11 @@ export interface Teacher {
   nip: string;
   subject: string;
   status: 'PNS' | 'PPPK' | 'GTY' | 'Honorer';
-  phone: string;
-  email: string;
-  birthDate: string;
-  address: string;
+  phone?: string;
+  email?: string;
+  birthDate?: string;
+  address?: string;
+  linkedUserId?: string;
 }
 
 export type LetterStatus = 'Pending' | 'Verified' | 'Validated' | 'Signed' | 'Ditolak';
@@ -145,13 +166,13 @@ export interface LetterRequest {
   status: LetterStatus;
   letterNumber?: string;
   adminNote?: string;
-  verifiedBy?: string; 
+  verifiedBy?: string;
   verifiedAt?: string;
-  validatedBy?: string; 
+  validatedBy?: string;
   validatedAt?: string;
-  signedBy?: string; 
+  signedBy?: string;
   signedAt?: string;
-  digitalSignatureHash?: string; 
+  digitalSignatureHash?: string;
 }
 
 export interface StudentGrade {
@@ -161,14 +182,6 @@ export interface StudentGrade {
   nilaiUTS: number;
   nilaiUAS: number;
   nilaiAkhir: number;
-}
-
-export interface Rapor {
-  studentId: string;
-  semester: number;
-  tahunAjaran: string;
-  catatanWaliKelas: string;
-  grades: StudentGrade[];
 }
 
 export interface JournalEntry {
@@ -194,8 +207,8 @@ export interface Assignment {
   teacherName: string;
   dueDate: string;
   status: 'Open' | 'Closed';
-  priority?: 'Low' | 'Medium' | 'High';
-  createdAt: string;
+  priority?: 'High' | 'Medium' | 'Low';
+  createdAt?: string;
 }
 
 export interface LoginHistoryEntry {
@@ -203,8 +216,29 @@ export interface LoginHistoryEntry {
   userId: string;
   timestamp: string;
   device: string;
+  ip: string;
   status: 'Success' | 'Failed';
-  ip?: string;
 }
 
-export type AttendanceStatus = 'Hadir' | 'Terlambat' | 'Sakit' | 'Izin' | 'Alpha' | 'Haid';
+// Added missing ViolationMaster export
+export interface ViolationMaster {
+  id: string;
+  category: string;
+  description: string;
+  points: number;
+}
+
+// Added missing DisciplineLog export
+export interface DisciplineLog {
+  id: string;
+  studentId: string;
+  studentName: string;
+  type: 'Violation' | 'Reward';
+  ruleId: string;
+  ruleDescription: string;
+  points: number;
+  date: string;
+  recordedBy: string;
+  status: 'Approved' | 'Pending' | 'Rejected';
+  note?: string;
+}

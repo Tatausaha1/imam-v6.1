@@ -3,7 +3,7 @@ import React from 'react';
 import { ViewState, UserRole } from '../types';
 import { 
   HomeIcon, UserIcon, CameraIcon, Squares2x2Icon, 
-  ClipboardDocumentListIcon, ChartBarIcon, RobotIcon
+  ClipboardDocumentListIcon, ChartBarIcon, RobotIcon, HeadsetIcon
 } from './Icons';
 
 interface BottomNavProps {
@@ -12,8 +12,9 @@ interface BottomNavProps {
   userRole?: UserRole;
 }
 
-const BottomNav: React.FC<BottomNavProps> = ({ currentView, onNavigate }) => {
-  
+const BottomNav: React.FC<BottomNavProps> = ({ currentView, onNavigate, userRole }) => {
+  const isStudent = userRole === UserRole.SISWA;
+
   const navItems = [
     { 
         id: 'home', 
@@ -55,33 +56,35 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentView, onNavigate }) => {
             {/* --- FLOATING ACTION GROUP (Raised to bottom-24) --- */}
             <div className="absolute bottom-24 right-6 z-50 flex flex-col items-center gap-4">
                 
-                {/* 1. FLOATING CHAT BUTTON (Helpdesk) */}
+                {/* 1. FLOATING LIVE CHAT BUTTON (Helpdesk) */}
                 <div className="flex flex-col items-center gap-1 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-150">
                     <div className="px-2 py-0.5 bg-violet-600 dark:bg-violet-500 rounded-full shadow-lg border border-white/20">
-                        <span className="text-[6px] font-black text-white uppercase tracking-[0.2em]">Panduan AI</span>
+                        <span className="text-[6px] font-black text-white uppercase tracking-[0.2em]">Live Chat</span>
                     </div>
                     <button 
                         onClick={() => onNavigate(ViewState.ADVISOR)}
                         className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-600 via-indigo-600 to-purple-700 text-white shadow-xl flex items-center justify-center border-2 border-white/20 active:scale-90 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden"
                     >
                         <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <RobotIcon className="w-5 h-5 relative z-10 drop-shadow-md animate-pulse" />
+                        <HeadsetIcon className="w-5 h-5 relative z-10 drop-shadow-md animate-pulse" />
                     </button>
                 </div>
 
-                {/* 2. FLOATING SCAN BUTTON */}
-                <div className="flex flex-col items-center gap-1 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                    <div className="px-2.5 py-0.5 bg-indigo-600 dark:bg-indigo-500 rounded-full shadow-lg shadow-indigo-500/30 border border-white/20 animate-bounce">
-                        <span className="text-[7px] font-black text-white uppercase tracking-[0.2em]">Scan QR</span>
+                {/* 2. FLOATING SCAN BUTTON (Hanya untuk non-Siswa) */}
+                {!isStudent && (
+                    <div className="flex flex-col items-center gap-1 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <div className="px-2.5 py-0.5 bg-indigo-600 dark:bg-indigo-500 rounded-full shadow-lg shadow-indigo-500/30 border border-white/20 animate-bounce">
+                            <span className="text-[7px] font-black text-white uppercase tracking-[0.2em]">Scan QR</span>
+                        </div>
+                        <button 
+                            onClick={() => onNavigate(ViewState.SCANNER)}
+                            className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 via-blue-600 to-indigo-700 text-white shadow-[0_10px_20px_rgba(79,70,229,0.4)] flex items-center justify-center border-2 border-white/20 active:scale-90 transition-all duration-300 hover:-translate-y-1 group overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <CameraIcon className="w-5 h-5 relative z-10 drop-shadow-md" />
+                        </button>
                     </div>
-                    <button 
-                        onClick={() => onNavigate(ViewState.SCANNER)}
-                        className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 via-blue-600 to-indigo-700 text-white shadow-[0_10px_20px_rgba(79,70,229,0.4)] flex items-center justify-center border-2 border-white/20 active:scale-90 transition-all duration-300 hover:-translate-y-1 group overflow-hidden"
-                    >
-                        <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <CameraIcon className="w-5 h-5 relative z-10 drop-shadow-md" />
-                    </button>
-                </div>
+                )}
 
             </div>
 

@@ -1,71 +1,122 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Fungsi pembantu untuk verifikasi login
+    // --- Helper Functions ---
+    
     function isSignedIn() {
       return request.auth != null;
     }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function getUserRole() {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(path) ? get(path).data.role : null;
+    }
+    
+    function isAdmin() {
+      let role = getUserRole();
+      return isSignedIn() && (role == 'admin' || role == 'developer');
+    }
+    
+    function isStaff() {
+      let role = getUserRole();
+      return isSignedIn() && (
+        role == 'admin' || 
+        role == 'developer' || 
+        role == 'Staf' || 
+        role == 'Guru' || 
+        role == 'Wali Kelas' || 
+        role == 'kepala_madrasah'
+      );
+    }
 
-    // Koleksi Users: User bisa baca data semua user (untuk linking), tapi hanya bisa tulis datanya sendiri
+    // --- Collection Rules ---
+
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (request.auth.uid == userId);
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow delete: if isAdmin();
     }
 
-    // Koleksi Data Induk: Izinkan pembacaan untuk semua pengguna terdaftar
-    // Penulisan dibatasi untuk Admin/Guru di aplikasi, tapi di level rules kita berikan akses login dahulu
-    match /students/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+    match /students/{studentId} {
+      allow get: if true;
+      allow list: if isSignedIn();
+      allow write: if isAdmin() || isStaff();
     }
 
-    match /teachers/{id} {
+    match /teachers/{teacherId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
 
-    match /classes/{id} {
+    match /classes/{classId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
 
-    match /attendance/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+    match /attendance/{recordId} {
+      allow read: if isStaff() || (isSignedIn() && request.auth.uid == resource.data.studentId);
+      allow write: if isStaff();
     }
 
-    match /letters/{id} {
-      allow read: if isSignedIn();
+    match /letters/{letterId} {
+      allow read: if isStaff() || (isSignedIn() && request.auth.uid == resource.data.userId);
       allow create: if isSignedIn();
-      allow update, delete: if isSignedIn();
+      allow update, delete: if isStaff() || (isSignedIn() && request.auth.uid == resource.data.userId);
     }
 
-    match /academic_years/{id} {
+    match /academic_years/{yearId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
 
-    match /schedules/{id} {
+    match /schedules/{scheduleId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
 
-    match /settings/{id} {
+    match /journals/{journalId} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+
+    match /assignments/{assignmentId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isStaff();
     }
 
-    match /login_logs/{id} {
+    match /grades/{gradeId} {
+      allow read: if isStaff() || (isSignedIn() && request.auth.uid == resource.data.studentId);
+      allow write: if isStaff();
+    }
+
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /discipline_logs/{logId} {
+      allow read: if isStaff() || (isSignedIn() && request.auth.uid == resource.data.studentId);
+      allow write: if isStaff();
+    }
+    
+    match /violations_master/{ruleId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /login_logs/{logId} {
       allow create: if isSignedIn();
-      allow read: if isSignedIn();
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.userId);
     }
 
-    // Aturan global fallback
     match /{document=**} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if isAdmin();
     }
   }
 }

@@ -33,7 +33,7 @@ const InputField = ({ label, icon: Icon, value, onChange, placeholder, type = "t
               onChange={e => onChange(e.target.value)} 
               placeholder={placeholder}
               className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 pl-12 pr-4 text-[11px] font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all resize-none shadow-inner"
-           />
+           ></textarea>
       ) : (
           <input 
               type="text" 
@@ -305,12 +305,10 @@ const MadrasahInfo: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                         onChange={(e) => setData({...data, misi: e.target.value.split('\n')})}
                         className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 pl-12 text-[11px] font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all resize-none shadow-inner"
                         placeholder="Misi 1&#10;Misi 2&#10;Misi 3..."
-                    />
+                    ></textarea>
                   </div>
               </div>
             </div>
-
-            {/* Kontak & Pimpinan Omitted for brevity, assuming standard form continues */}
 
             {/* Action Buttons */}
             <div className="pt-4 flex gap-4 sticky bottom-6 z-20">

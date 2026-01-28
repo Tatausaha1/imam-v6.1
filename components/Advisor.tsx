@@ -1,3 +1,4 @@
+
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -23,7 +24,7 @@ const Advisor: React.FC<AdvisorProps> = ({ onBack }) => {
     {
       id: 'welcome',
       role: 'model',
-      text: "Halo! Saya **Pusat Bantuan IMAM**. \n\nSaya siap memandu Anda cara mengoperasikan fitur-fitur di aplikasi ini. Apa yang ingin Anda ketahui cara penggunaannya?",
+      text: "Halo! Saya **Live Chat IMAM**. \n\nSaya siap memandu Anda cara mengoperasikan fitur-fitur di aplikasi ini secara langsung. Apa yang ingin Anda tanyakan?",
       timestamp: new Date()
     }
   ]);
@@ -31,10 +32,10 @@ const Advisor: React.FC<AdvisorProps> = ({ onBack }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const initialSuggestions = [
-    "Cara menggunakan Scan QR?",
-    "Bagaimana alur surat digital?",
+    "Bagaimana cara absen?",
+    "Alur surat digital?",
     "Cara isi jurnal mengajar?",
-    "Cara melihat kartu pelajar?"
+    "Melihat kartu pelajar?"
   ];
 
   const scrollToBottom = () => {
@@ -117,11 +118,11 @@ const Advisor: React.FC<AdvisorProps> = ({ onBack }) => {
         </button>
         <div>
           <h2 className="font-black text-slate-900 dark:text-white flex items-center gap-2 text-sm uppercase tracking-tight">
-            Panduan Operasional <SparklesIcon className="w-4 h-4 text-indigo-500" />
+            Layanan Live Chat <SparklesIcon className="w-4 h-4 text-indigo-500" />
           </h2>
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Helpdesk Aktif</p>
+            <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Operator Online</p>
           </div>
         </div>
       </div>
@@ -201,7 +202,7 @@ const Advisor: React.FC<AdvisorProps> = ({ onBack }) => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Tanyakan petunjuk pengoperasian..."
+            placeholder="Ketik pesan untuk Live Chat..."
             className="flex-1 bg-transparent px-4 text-xs font-bold outline-none text-slate-800 dark:text-white placeholder-slate-400"
           />
           <button 
@@ -212,7 +213,7 @@ const Advisor: React.FC<AdvisorProps> = ({ onBack }) => {
             <ArrowRightIcon className="w-5 h-5" />
           </button>
         </div>
-        <p className="text-[8px] text-center text-slate-400 font-bold uppercase tracking-[0.2em] mt-3">Pusat Bantuan Digital IMAM v6.1</p>
+        <p className="text-[8px] text-center text-slate-400 font-bold uppercase tracking-[0.2em] mt-3">Layanan Live Chat IMAM v6.1</p>
       </div>
     </div>
   );

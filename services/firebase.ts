@@ -20,8 +20,8 @@ const firebaseConfig = {
   measurementId: "G-WDB4WFXBLZ"
 };
 
-// Mode simulasi aktif jika variabel env NEXT_PUBLIC_MOCK_AUTH disetel 'true'
-export const isMockMode = typeof window !== 'undefined' && (window as any).process?.env?.NEXT_PUBLIC_MOCK_AUTH === 'true';
+// Mode simulasi dinonaktifkan untuk mengaktifkan database asli
+export const isMockMode = false;
 
 let app: firebase.app.App | undefined;
 let auth: firebase.auth.Auth | undefined;
@@ -38,8 +38,8 @@ try {
   auth = firebase.auth();
   db = firebase.firestore();
   
-  if (typeof window !== 'undefined') {
-      // Mengaktifkan sinkronisasi data offline lintas tab browser
+  if (typeof window !== 'undefined' && db) {
+      // Mengaktifkan sinkronisasi data offline agar aplikasi tetap berjalan meski internet tidak stabil
       db.enablePersistence({ synchronizeTabs: true })
         .catch((err) => {
             if (err.code === 'failed-precondition') {
@@ -54,7 +54,7 @@ try {
      analytics = firebase.analytics();
   }
   
-  console.log("IMAM Database Connection: " + (isMockMode ? "SIMULATION MODE" : "LIVE CLOUD CONNECTED"));
+  console.log("IMAM Database: LIVE CLOUD DATABASE ACTIVATED");
 
 } catch (error) {
   console.error("Firebase initialization error:", error);

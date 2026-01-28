@@ -22,10 +22,10 @@ import Reports from './Reports';
 import ProtectedRoute from './ProtectedRoute';
 import Advisor from './Advisor';
 import Settings from './Settings';
-import MobileContainer from './MobileContainer';
+import PointsView from './PointsView';
 import { ViewState, UserRole } from '../types';
 import { toast } from 'sonner';
-import { Loader2, AppLogo, SparklesIcon } from './Icons';
+import { Loader2, AppLogo } from './Icons';
 import { auth, db, isMockMode } from '../services/firebase';
 
 // Feature Views
@@ -49,7 +49,6 @@ import News from './News';
 import MadrasahInfo from './MadrasahInfo';
 
 const App: React.FC = () => {
-  // Fix: Default ke LOGIN untuk mencegah query database sebelum login
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.LOGIN);
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>(UserRole.GURU);
@@ -58,12 +57,13 @@ const App: React.FC = () => {
   const [viewKey, setViewKey] = useState(0); 
 
   useEffect(() => {
-      // Check if onboarding is needed
+      // Check for onboarding completion
       const onboardingDone = localStorage.getItem('imam_onboarding_done');
       if (!onboardingDone) {
           setCurrentView(ViewState.ONBOARDING);
       }
 
+      // Theme logic with system preference fallback
       const savedTheme = localStorage.getItem('theme');
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       const shouldBeDark = savedTheme === 'dark' || (!savedTheme && prefersDark);
@@ -72,6 +72,7 @@ const App: React.FC = () => {
       if (shouldBeDark) document.documentElement.classList.add('dark');
       else document.documentElement.classList.remove('dark');
       
+      // Connection monitoring
       const handleOnline = () => { setIsOnline(true); toast.success("Koneksi online."); };
       const handleOffline = () => { setIsOnline(false); toast.warning("Mode Offline Aktif."); };
 
@@ -79,34 +80,22 @@ const App: React.FC = () => {
       window.addEventListener('offline', handleOffline);
 
       if (isMockMode) {
-          setTimeout(() => setAuthLoading(false), 1000); 
+          setAuthLoading(false); 
       } else if (auth) {
           const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
               if (user && db) {
                   try {
-                      // Cek apakah user sudah ada di koleksi 'users'
                       const userRef = db.collection('users').doc(user.uid);
                       const userDoc = await userRef.get();
                       
                       if (userDoc.exists) {
                           const data = userDoc.data();
-                          setUserRole(data?.role as UserRole || UserRole.GURU);
-                          setCurrentView(ViewState.DASHBOARD);
-                      } else {
-                          // Jika user baru login via Auth tapi belum ada di Firestore (Auto-provisioning)
-                          const newUserData = {
-                              uid: user.uid,
-                              displayName: user.displayName || 'Pengguna Baru',
-                              email: user.email,
-                              role: UserRole.GURU, // Default role
-                              createdAt: new Date().toISOString()
-                          };
-                          await userRef.set(newUserData);
-                          setUserRole(UserRole.GURU);
-                          setCurrentView(ViewState.DASHBOARD);
+                          const role = data?.role as UserRole || UserRole.GURU;
+                          setUserRole(role);
+                          setCurrentView(prev => prev === ViewState.LOGIN ? ViewState.DASHBOARD : prev);
                       }
                   } catch (e: any) { 
-                      console.warn("Peringatan sinkronisasi profil:", e.message);
+                      console.warn("Auth sync failure:", e.message);
                   }
               }
               setAuthLoading(false);
@@ -150,20 +139,20 @@ const App: React.FC = () => {
 
   const backToDashboard = () => handleNavigate(ViewState.DASHBOARD);
 
-  // Loading state yang lebih bersih
   if (authLoading) {
       return (
-          <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#020617] relative overflow-hidden">
-              <div className="relative z-10 flex flex-col items-center animate-in fade-in zoom-in duration-700">
-                  <div className="w-20 h-20 mb-6"><AppLogo className="w-full h-full" /></div>
-                  <div className="flex items-center gap-3">
-                      <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
-                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] animate-pulse">Menghubungkan Core Engine...</p>
-                  </div>
+          <div className="fixed inset-0 h-screen w-full flex flex-col items-center justify-center bg-[#020617] z-[100]">
+              <div className="relative z-10 flex flex-col items-center animate-in fade-in duration-500">
+                  <div className="w-16 h-16 mb-6 opacity-40"><AppLogo className="w-full h-full" /></div>
+                  <Loader2 className="w-6 h-6 text-indigo-500 animate-spin opacity-30" />
               </div>
           </div>
       );
   }
+
+  const adminDevOnly = [UserRole.ADMIN, UserRole.DEVELOPER];
+  const staffAbove = [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.GURU, UserRole.STAF, UserRole.WALI_KELAS, UserRole.KEPALA_MADRASAH];
+  const devOnly = [UserRole.DEVELOPER];
 
   const renderView = () => {
     switch (currentView) {
@@ -181,21 +170,28 @@ const App: React.FC = () => {
       case ViewState.PREMIUM: return <Premium onBack={backToDashboard} />;
       case ViewState.ADVISOR: return <Advisor onBack={backToDashboard} />;
       case ViewState.MADRASAH_INFO: return <MadrasahInfo onBack={backToDashboard} />;
-      case ViewState.CLASSES: return <ClassList onBack={backToDashboard} userRole={userRole} />;
-      case ViewState.SCANNER: return <QRScanner onBack={backToDashboard} />;
-      case ViewState.ATTENDANCE_HISTORY: return <AttendanceHistory onBack={backToDashboard} onNavigate={handleNavigate} />;
-      case ViewState.PRESENSI: return <Presensi onBack={backToDashboard} onNavigate={handleNavigate} />;
-      case ViewState.CONTENT_GENERATION: return <ContentGeneration onBack={backToDashboard} />;
-      case ViewState.REPORTS: return <Reports onBack={backToDashboard} />;
-      case ViewState.JOURNAL: return <TeachingJournal onBack={backToDashboard} userRole={userRole} />;
+      case ViewState.CLASSES: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><ClassList onBack={backToDashboard} userRole={userRole} /></ProtectedRoute>;
+      case ViewState.SCANNER: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><QRScanner onBack={backToDashboard} /></ProtectedRoute>;
+      case ViewState.ATTENDANCE_HISTORY: return <AttendanceHistory onBack={backToDashboard} onNavigate={handleNavigate} userRole={userRole} />;
+      case ViewState.PRESENSI: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><Presensi onBack={backToDashboard} onNavigate={handleNavigate} /></ProtectedRoute>;
+      case ViewState.CONTENT_GENERATION: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><ContentGeneration onBack={backToDashboard} /></ProtectedRoute>;
+      case ViewState.REPORTS: return <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={backToDashboard}><Reports onBack={backToDashboard} /></ProtectedRoute>;
+      case ViewState.JOURNAL: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><TeachingJournal onBack={backToDashboard} userRole={userRole} /></ProtectedRoute>;
       case ViewState.ASSIGNMENTS: return <Assignments onBack={backToDashboard} userRole={userRole} />;
       case ViewState.GRADES:
       case ViewState.REPORT_CARDS: return <Grades onBack={backToDashboard} userRole={userRole} />;
-      case ViewState.STUDENTS: return <StudentData onBack={backToDashboard} userRole={userRole} />;
-      case ViewState.TEACHERS: return <TeacherData onBack={backToDashboard} userRole={userRole} />;
+      case ViewState.STUDENTS: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><StudentData onBack={backToDashboard} userRole={userRole} /></ProtectedRoute>;
+      case ViewState.TEACHERS: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><TeacherData onBack={backToDashboard} userRole={userRole} /></ProtectedRoute>;
       case ViewState.LETTERS: return <Letters onBack={backToDashboard} userRole={userRole} />;
-      case ViewState.CREATE_ACCOUNT: return <CreateAccount onBack={backToDashboard} userRole={userRole} />;
-      case ViewState.DEVELOPER: return <DeveloperConsole onBack={backToDashboard} />;
+      case ViewState.POINTS: return <PointsView onBack={backToDashboard} />;
+      case ViewState.PUSAKA: return <GenericView title="Pusaka Kemenag" onBack={backToDashboard} description="Integrasi resmi dengan Pusaka Super Apps Kementerian Agama RI untuk layanan kepegawaian dan administrasi terpusat." />;
+      case ViewState.CREATE_ACCOUNT: 
+        return (
+            <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={backToDashboard}>
+                <CreateAccount onBack={backToDashboard} userRole={userRole} />
+            </ProtectedRoute>
+        );
+      case ViewState.DEVELOPER: return <ProtectedRoute allowedRoles={devOnly} userRole={userRole} onBack={backToDashboard}><DeveloperConsole onBack={backToDashboard} /></ProtectedRoute>;
       case ViewState.SETTINGS: return <Settings onBack={backToDashboard} onNavigate={handleNavigate} onLogout={handleLogout} isDarkMode={isDarkTheme} onToggleTheme={toggleTheme} userRole={userRole} />;
       default: return <GenericView title="Fitur" onBack={backToDashboard} />;
     }
@@ -204,28 +200,35 @@ const App: React.FC = () => {
   const isFullPageHeader = currentView === ViewState.LOGIN || currentView === ViewState.ONBOARDING;
 
   return (
-    <MobileContainer isDarkTheme={isDarkTheme}>
-        <div className="h-full w-full relative flex font-sans overflow-hidden transition-all duration-700 z-10">
-            {!isOnline && (
-                <div className="fixed top-0 left-0 right-0 z-[100] bg-orange-600 text-white text-[9px] font-black uppercase tracking-[0.2em] text-center py-1">
-                    Mode Offline Aktif
-                </div>
-            )}
+    <div className="h-screen w-full flex flex-col font-sans overflow-hidden bg-white dark:bg-[#020617] relative">
+        {!isOnline && (
+            <div className="fixed top-0 left-0 right-0 z-[1000] bg-orange-600 text-white text-[9px] font-black uppercase tracking-[0.2em] text-center py-1">
+                Mode Offline Aktif
+            </div>
+        )}
+        <div className="h-full w-full relative flex overflow-hidden">
+            {/* Desktop Sidebar */}
             {!isFullPageHeader && (
-                <div className="hidden md:block w-72 lg:w-80 shrink-0 h-full border-r border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#0B1121]/80 backdrop-blur-xl z-40">
+                <div className="hidden md:block w-72 lg:w-80 shrink-0 h-full border-r border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-[#0B1121]/50 backdrop-blur-xl z-40">
                     <Sidebar currentView={currentView} onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />
                 </div>
             )}
-            <div className="flex-1 flex flex-col h-full w-full relative overflow-hidden z-10">
-                <div key={viewKey} className={`flex-1 overflow-hidden relative ${!isOnline ? 'mt-4' : ''} animate-in fade-in duration-300`}>
+            
+            {/* Main Application Area */}
+            <div className="flex-1 flex flex-col h-full w-full relative overflow-hidden">
+                <div key={viewKey} className={`flex-1 overflow-hidden relative animate-in fade-in slide-in-from-bottom-2 duration-300 ${!isOnline ? 'mt-4' : ''}`}>
                     {renderView()}
                 </div>
+                
+                {/* Mobile Navigation */}
                 {!isFullPageHeader && (
-                    <div className="md:hidden"><BottomNav currentView={currentView} onNavigate={handleNavigate} userRole={userRole} /></div>
+                    <div className="md:hidden shrink-0 z-50">
+                      <BottomNav currentView={currentView} onNavigate={handleNavigate} userRole={userRole} />
+                    </div>
                 )}
             </div>
         </div>
-    </MobileContainer>
+    </div>
   );
 };
 

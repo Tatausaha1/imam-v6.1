@@ -9,7 +9,8 @@ import { db, isMockMode } from './firebase';
 import { format } from 'date-fns';
 import { Student, AttendanceStatus } from '../types';
 
-export type AttendanceSession = 'Masuk' | 'Duha' | 'Zuhur' | 'Ashar' | 'Pulang';
+// Updated AttendanceSession to include combined modes used in QRScanner
+export type AttendanceSession = 'Masuk' | 'Duha' | 'Zuhur' | 'Ashar' | 'Pulang' | 'Masuk/Duha' | 'Ashar/Pulang';
 
 interface ScanResult {
     success: boolean;
@@ -20,10 +21,10 @@ interface ScanResult {
 }
 
 /**
- * Mencatat kehadiran berdasarkan pemindaian ID Unik atau NISN
- * Dioptimalkan dengan proteksi rekaman ganda (Anti-Duplicate)
+ * Mencatat kehadiran berdasarkan pemindaian ID Unik secara eksklusif.
  */
-export const recordAttendanceByScan = async (rawCode: any, session: AttendanceSession, isHaid: boolean = false): Promise<ScanResult> => {
+export const recordAttendanceByScan = async (rawCode: string, session: AttendanceSession, isHaid: boolean = false): Promise<ScanResult> => {
+    // Sanitasi kode: Hapus karakter kontrol dan spasi
     const code = String(rawCode || '').replace(/[\x00-\x1F\x7F-\x9F]/g, "").trim();
     
     if (!code) {
@@ -31,110 +32,114 @@ export const recordAttendanceByScan = async (rawCode: any, session: AttendanceSe
     }
 
     const today = format(new Date(), "yyyy-MM-dd");
-    const now = format(new Date(), "HH:mm:ss");
+    const nowObj = new Date();
+    const now = format(nowObj, "HH:mm:ss");
+    const currentHour = nowObj.getHours();
     const LATE_THRESHOLD = "07:30:00"; 
 
-    const recordValue = isHaid ? "Haid" : now;
+    // PERUBAHAN: Selalu rekam jam 'now', status 'Haid' akan diatur di field 'status'
+    const recordValue = now;
+    
+    // Map session to the appropriate database field, handling combined sessions dynamically
     const fieldMap: Record<AttendanceSession, string> = {
         'Masuk': 'checkIn',
         'Duha': 'duha',
         'Zuhur': 'zuhur',
         'Ashar': 'ashar',
-        'Pulang': 'checkOut'
+        'Pulang': 'checkOut',
+        'Masuk/Duha': currentHour < 8 ? 'checkIn' : 'duha',
+        'Ashar/Pulang': currentHour < 16 ? 'ashar' : 'checkOut'
     };
     const fieldName = fieldMap[session];
-
-    const getSuccessMessage = (sess: AttendanceSession, isLate: boolean, haid: boolean) => {
-        if (haid) return `STATUS HAID BERHASIL DICATAT`;
-        if (sess === 'Masuk') return isLate ? "MASUK (TERLAMBAT)" : "MASUK (TEPAT WAKTU)";
-        return `${sess.toUpperCase()} BERHASIL DICATAT`;
-    };
 
     // --- MODE SIMULASI ---
     if (isMockMode) {
         return new Promise<ScanResult>(resolve => {
             setTimeout(() => {
                 if (code === "000") return resolve({ success: false, message: "ID TIDAK TERDAFTAR" });
-                const isLate = session === 'Masuk' && now > LATE_THRESHOLD;
+                const isLate = (session === 'Masuk' || session === 'Masuk/Duha') && now > LATE_THRESHOLD;
                 resolve({
                     success: true,
-                    message: getSuccessMessage(session, isLate, isHaid),
+                    message: isHaid ? "STATUS HAID TERKONFIRMASI" : (isLate ? "MASUK (TERLAMBAT)" : "PRESENSI BERHASIL"),
                     student: { namaLengkap: 'SISWA SIMULASI', tingkatRombel: 'XII IPA 1', idUnik: code, jenisKelamin: 'Perempuan' } as any,
                     timestamp: recordValue,
                     statusRecorded: isHaid ? 'Haid' : (isLate ? 'Terlambat' : 'Hadir')
                 });
-            }, 300);
+            }, 400);
         });
     }
 
     if (!db) return { success: false, message: "DATABASE OFFLINE" };
 
     try {
-        // 1. Cari Siswa
-        let studentDoc: firebase.firestore.DocumentSnapshot | null = null;
-        const qIdUnik = await db.collection('students').where('idUnik', '==', code).limit(1).get();
+        let studentData: Student | null = null;
         
-        if (!qIdUnik.empty) {
-            studentDoc = qIdUnik.docs[0];
+        // Attempt direct doc lookup first (NISN-based IDs)
+        const studentDoc = await db.collection('students').doc(code).get();
+        if (studentDoc.exists) {
+            studentData = { id: studentDoc.id, ...studentDoc.data() } as Student;
         } else {
-            const qNisn = await db.collection('students').where('nisn', '==', code).limit(1).get();
-            if (!qNisn.empty) studentDoc = qNisn.docs[0];
+            // Fallback to query if docId != code
+            const studentQuery = await db.collection('students').where('idUnik', '==', code).limit(1).get();
+            if (!studentQuery.empty) {
+                const sDoc = studentQuery.docs[0];
+                studentData = { id: sDoc.id, ...sDoc.data() } as Student;
+            }
         }
 
-        if (!studentDoc || !studentDoc.exists) {
-            return { success: false, message: `ID "${code}" TIDAK DIKENALI` };
+        if (!studentData) {
+            return { success: false, message: `ID "${code}" TIDAK TERDAFTAR` };
         }
 
-        const studentData = { id: studentDoc.id, ...studentDoc.data() } as Student;
-
-        // 2. Validasi Gender untuk Mode Haid
+        // Validasi Mode Haid
         if (isHaid && studentData.jenisKelamin === 'Laki-laki') {
-            return { success: false, message: "MODE HAID HANYA UNTUK PEREMPUAN", student: studentData };
+            return { success: false, message: "MODE HAID HANYA UNTUK PUTRI", student: studentData };
         }
 
         const attendanceId = `${studentData.id}_${today}`;
         const attendanceRef = db.collection('attendance').doc(attendanceId);
         const docSnapshot = await attendanceRef.get();
-        const currentData = docSnapshot.data();
+        const currentData = docSnapshot?.exists ? docSnapshot.data() : null;
 
-        // --- 3. PROTEKSI REKAMAN GANDA (REALTIME CHECK) ---
-        if (docSnapshot.exists && currentData) {
-            // Cek jika sudah Haid (Maka tidak perlu absen Duha/Zuhur/Ashar lagi)
-            if (currentData.status === 'Haid' && isHaid) {
-                return { success: false, message: "STATUS HAID SUDAH TEREKAM", student: studentData };
-            }
-
-            // Cek jika sesi ini sudah pernah discan
+        // Cek Double Scan
+        if (docSnapshot?.exists && currentData) {
+            // Jika sudah terekam jam di sesi ini, beri peringatan
             if (currentData[fieldName] && currentData[fieldName] !== 'Alpha') {
-                return { success: false, message: `ANDA SUDAH ABSEN ${session.toUpperCase()}`, student: studentData };
+                return { success: false, message: `SUDAH TERREKAM`, student: studentData };
             }
         }
 
-        // 4. Proses Simpan
-        const isLate = session === 'Masuk' && now > LATE_THRESHOLD;
+        // Tentukan Status Kehadiran
+        const isLate = (session === 'Masuk' || session === 'Masuk/Duha') && now > LATE_THRESHOLD;
         const updatePayload: any = { 
             [fieldName]: recordValue,
             studentId: studentData.id,
             studentName: studentData.namaLengkap,
             class: studentData.tingkatRombel,
-            idUnik: studentData.idUnik || studentData.nisn || code,
+            idUnik: studentData.idUnik,
             date: today,
-            gender: studentData.jenisKelamin,
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         };
 
-        if (docSnapshot.exists && currentData) {
-            if (isHaid) updatePayload.status = 'Haid';
-            else if (session === 'Masuk' && !currentData.status) updatePayload.status = isLate ? 'Terlambat' : 'Hadir';
+        // Jika mode Haid aktif, paksa status harian menjadi 'Haid'
+        if (isHaid) {
+            updatePayload.status = 'Haid';
+        } else if (!currentData?.status || currentData.status === 'Alpha' || currentData.status === 'Hadir' || currentData.status === 'Terlambat') {
+            // Jangan timpa status 'Haid', 'Sakit', 'Izin' dengan status 'Hadir/Terlambat' otomatis
+            if (session === 'Masuk' || session === 'Masuk/Duha') {
+                updatePayload.status = isLate ? 'Terlambat' : 'Hadir';
+            }
+        }
+
+        if (docSnapshot?.exists) {
             await attendanceRef.update(updatePayload);
         } else {
-            updatePayload.status = isHaid ? 'Haid' : (isLate ? 'Terlambat' : 'Hadir');
             await attendanceRef.set(updatePayload);
         }
 
         return {
             success: true,
-            message: getSuccessMessage(session, isLate, isHaid),
+            message: isHaid ? "STATUS HAID DICATAT" : (isLate ? "MASUK (TERLAMBAT)" : "BERHASIL"),
             student: studentData,
             timestamp: recordValue,
             statusRecorded: updatePayload.status || 'Hadir'
@@ -142,6 +147,6 @@ export const recordAttendanceByScan = async (rawCode: any, session: AttendanceSe
 
     } catch (error: any) {
         console.error("Attendance Error:", error);
-        return { success: false, message: "GAGAL MENGHUBUNGI SERVER" };
+        return { success: false, message: "GANGGUAN IZIN DATABASE" };
     }
 };

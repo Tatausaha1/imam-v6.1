@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export const HomeIcon = ({ className }: { className?: string }) => (
@@ -90,6 +91,14 @@ export const RobotIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+export const HeadsetIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M18 10a8 8 0 0 0-12 0" />
+  </svg>
+);
+
 export const UserIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
@@ -156,7 +165,7 @@ export const EnvelopeIcon = ({ className }: { className?: string }) => (
 
 export const SparklesIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09-3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0-1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09-3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0-1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
   </svg>
 );
 
@@ -164,6 +173,86 @@ export const ShieldCheckIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
   </svg>
+);
+
+export const PusakaIcon = ({ className }: { className?: string }) => (
+  <img 
+    src="https://lh3.googleusercontent.com/d/1bRX-yogRsfbDeAzpdDxP9Hj9OaEv88Nd" 
+    alt="Pusaka Logo" 
+    className={`w-full h-full object-contain ${className}`}
+    referrerPolicy="no-referrer"
+    crossOrigin="anonymous"
+  />
+);
+
+export const RdmIcon = ({ className }: { className?: string }) => (
+  <img 
+    src="https://lh3.googleusercontent.com/d/1LaNh2QMfdsfdIARzRqO9z28kmHdwXVYK" 
+    alt="RDM Logo" 
+    className={`w-full h-full object-contain ${className}`}
+    referrerPolicy="no-referrer"
+    crossOrigin="anonymous"
+  />
+);
+
+export const EmisIcon = ({ className }: { className?: string }) => (
+  <img 
+    src="https://lh3.googleusercontent.com/d/1h2S3ic5k_RFaJBOSK9EGpZm6xhHEXQtL" 
+    alt="Emis Logo" 
+    className={`w-full h-full object-contain ${className}`}
+    referrerPolicy="no-referrer"
+    crossOrigin="anonymous"
+  />
+);
+
+export const Emis40Icon = ({ className }: { className?: string }) => (
+  <img 
+    src="https://lh3.googleusercontent.com/d/1LC86T4WSlUzIwxQEFQDV2hoR--zpe0bi" 
+    alt="Emis 4.0 Logo" 
+    className={`w-full h-full object-contain ${className}`}
+    referrerPolicy="no-referrer"
+    crossOrigin="anonymous"
+  />
+);
+
+export const PintarIcon = ({ className }: { className?: string }) => (
+  <img 
+    src="https://lh3.googleusercontent.com/d/16huzm5CuNdDF91_wIndGgnJTGHXUM2kU" 
+    alt="Pintar Logo" 
+    className={`w-full h-full object-contain ${className}`}
+    referrerPolicy="no-referrer"
+    crossOrigin="anonymous"
+  />
+);
+
+export const AsnDigitalIcon = ({ className }: { className?: string }) => (
+  <img 
+    src="https://lh3.googleusercontent.com/d/10KEBDQ0zxpPo9tYKHBOXuLPt3wgXBvhM" 
+    alt="ASN Digital Logo" 
+    className={`w-full h-full object-contain ${className}`}
+    referrerPolicy="no-referrer"
+    crossOrigin="anonymous"
+  />
+);
+
+export const SimsdmIcon = ({ className }: { className?: string }) => (
+  <img 
+    src="https://lh3.googleusercontent.com/d/10TbuMUaaspE8HBDYCI6VimGrdRNf614j" 
+    alt="SIMSDM Logo" 
+    className={`w-full h-full object-contain ${className}`}
+    referrerPolicy="no-referrer"
+    crossOrigin="anonymous"
+  />
+);
+
+export const AbsensiKemenagIcon = ({ className }: { className?: string }) => (
+  <img 
+    src="https://lh3.googleusercontent.com/d/1gd2SoKrr0nDhCfSFwQr6rUdR6ZPyXUMt" 
+    alt="Absensi Kemenag Logo" 
+    className={`w-full h-full object-contain ${className}`}
+    referrerPolicy="no-referrer"
+    crossOrigin="anonymous"
+  />
 );
 
 export const Loader2 = ({ className }: { className?: string }) => (

@@ -1,3 +1,4 @@
+
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -10,7 +11,7 @@ import {
   BookOpenIcon, EnvelopeIcon, CalendarDaysIcon, UsersIcon, LogOutIcon,
   BriefcaseIcon, CalendarIcon, ArrowTrendingUpIcon, BuildingLibraryIcon,
   InfoIcon, XMarkIcon, CommandLineIcon, ClipboardDocumentListIcon, AcademicCapIcon,
-  SparklesIcon, CogIcon
+  SparklesIcon, CogIcon, UserPlusIcon, PusakaIcon, RdmIcon, EmisIcon, Emis40Icon, PintarIcon, AsnDigitalIcon, SimsdmIcon, AbsensiKemenagIcon, HeadsetIcon
 } from './Icons';
 
 interface SidebarProps {
@@ -24,49 +25,92 @@ interface SidebarProps {
 interface SidebarItem {
     label: string;
     icon: React.ElementType;
-    view: ViewState;
+    view?: ViewState;
+    url?: string;
     roles?: UserRole[]; 
-    section?: string;
-    highlight?: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = UserRole.GURU, onLogout, onClose }) => {
   
   const menuItems: SidebarItem[] = [
-    { label: 'Beranda', icon: HomeIcon, view: ViewState.DASHBOARD, section: 'Utama' },
-    { label: 'Profil Madrasah', icon: BuildingLibraryIcon, view: ViewState.MADRASAH_INFO, section: 'Data Induk' },
-    { label: 'Data Siswa', icon: UsersIcon, view: ViewState.STUDENTS, section: 'Data Induk' },
-    { label: 'Data Guru', icon: BriefcaseIcon, view: ViewState.TEACHERS, section: 'Data Induk' },
-    { label: 'Data Kelas', icon: BookOpenIcon, view: ViewState.CLASSES, section: 'Data Induk' },
-    { label: 'Jadwal', icon: CalendarIcon, view: ViewState.SCHEDULE, section: 'Akademik' },
-    { label: 'Jurnal', icon: BookOpenIcon, view: ViewState.JOURNAL, section: 'Akademik' },
-    { label: 'Tugas & PR', icon: ClipboardDocumentListIcon, view: ViewState.ASSIGNMENTS, section: 'Akademik' },
-    { label: 'Rapor Digital', icon: AcademicCapIcon, view: ViewState.REPORT_CARDS, section: 'Akademik' },
-    { label: 'Scan QR', icon: QrCodeIcon, view: ViewState.SCANNER, section: 'Presensi' },
-    { label: 'Input Presensi', icon: QrCodeIcon, view: ViewState.PRESENSI, section: 'Presensi' },
-    { label: 'Riwayat Absen', icon: CalendarDaysIcon, view: ViewState.ATTENDANCE_HISTORY, section: 'Presensi' },
-    { label: 'Panduan AI', icon: RobotIcon, view: ViewState.ADVISOR, section: 'Bantuan' },
-    { label: 'Alat Guru AI', icon: RobotIcon, view: ViewState.CONTENT_GENERATION, section: 'Administrasi' },
-    { label: 'Layanan Surat', icon: EnvelopeIcon, view: ViewState.LETTERS, section: 'Administrasi' },
-    { label: 'Laporan Cetak', icon: ChartBarIcon, view: ViewState.REPORTS, section: 'Administrasi' },
-    { label: 'Profil Saya', icon: UserIcon, view: ViewState.PROFILE, section: 'Sistem' },
-    { label: 'Pengaturan', icon: CogIcon, view: ViewState.SETTINGS, section: 'Sistem' },
-    { label: 'Tentang', icon: InfoIcon, view: ViewState.ABOUT, section: 'Sistem' },
+    { label: 'Beranda', icon: HomeIcon, view: ViewState.DASHBOARD },
+    { label: 'Profil Madrasah', icon: BuildingLibraryIcon, view: ViewState.MADRASAH_INFO },
+    { label: 'Data Siswa', icon: UsersIcon, view: ViewState.STUDENTS },
+    { label: 'Data Guru', icon: BriefcaseIcon, view: ViewState.TEACHERS },
+    { label: 'Data Kelas', icon: BookOpenIcon, view: ViewState.CLASSES },
+    { label: 'Jadwal', icon: CalendarIcon, view: ViewState.SCHEDULE },
+    { label: 'Jurnal', icon: BookOpenIcon, view: ViewState.JOURNAL },
+    { label: 'Tugas & PR', icon: ClipboardDocumentListIcon, view: ViewState.ASSIGNMENTS },
+    { label: 'Rapor Digital', icon: AcademicCapIcon, view: ViewState.REPORT_CARDS },
+    { label: 'Scan QR', icon: QrCodeIcon, view: ViewState.SCANNER, roles: [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.GURU, UserRole.STAF, UserRole.WALI_KELAS, UserRole.KEPALA_MADRASAH] },
+    { label: 'Input Presensi', icon: QrCodeIcon, view: ViewState.PRESENSI, roles: [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.GURU, UserRole.STAF] },
+    { label: 'Riwayat Absen', icon: CalendarDaysIcon, view: ViewState.ATTENDANCE_HISTORY },
+    { label: 'Live Chat', icon: HeadsetIcon, view: ViewState.ADVISOR },
+    { label: 'Alat Guru AI', icon: HeadsetIcon, view: ViewState.CONTENT_GENERATION, roles: [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.GURU, UserRole.WALI_KELAS] },
+    { label: 'Layanan Surat', icon: EnvelopeIcon, view: ViewState.LETTERS },
+    { 
+        label: 'Pusaka Kemenag', 
+        icon: PusakaIcon, 
+        url: 'https://pusaka-v3.kemenag.go.id/' 
+    },
+    { 
+        label: 'RDM', 
+        icon: RdmIcon, 
+        url: 'https://hdmadrasah.id/login/auth' 
+    },
+    { 
+        label: 'Emis 4.0', 
+        icon: Emis40Icon, 
+        url: 'https://emis.kemenag.go.id/' 
+    },
+    { 
+        label: 'Emis GTK', 
+        icon: EmisIcon, 
+        url: 'https://emisgtk.kemenag.go.id/' 
+    },
+    { 
+        label: 'SIMSDM', 
+        icon: SimsdmIcon, 
+        url: 'https://simpeg5.kemenag.go.id/' 
+    },
+    { 
+        label: 'Absensi Kemenag', 
+        icon: AbsensiKemenagIcon, 
+        url: 'https://sso.kemenag.go.id/auth/signin?appid=42095eeec431ac23eb12d2b772c94be0' 
+    },
+    { 
+        label: 'Pintar', 
+        icon: PintarIcon, 
+        url: 'https://pintar.kemenag.go.id/' 
+    },
+    { 
+        label: 'ASN Digital', 
+        icon: AsnDigitalIcon, 
+        url: 'https://asndigital.bkn.go.id/' 
+    },
+    { label: 'Laporan Cetak', icon: ChartBarIcon, view: ViewState.REPORTS, roles: [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.KEPALA_MADRASAH] },
+    { label: 'Profil Saya', icon: UserIcon, view: ViewState.PROFILE },
+    { 
+        label: 'Manajemen User', 
+        icon: UserPlusIcon, 
+        view: ViewState.CREATE_ACCOUNT, 
+        roles: [UserRole.ADMIN, UserRole.DEVELOPER] 
+    },
+    { label: 'Pengaturan', icon: CogIcon, view: ViewState.SETTINGS },
+    { label: 'Tentang', icon: InfoIcon, view: ViewState.ABOUT },
   ];
 
-  const sections = useMemo<Record<string, SidebarItem[]>>(() => {
-      const groups: Record<string, SidebarItem[]> = {};
-      menuItems.forEach(item => {
-          const sec = item.section || 'Lainnya';
-          if (!groups[sec]) groups[sec] = [];
-          groups[sec].push(item);
-      });
-      return groups;
-  }, []);
+  // Filter items based on user role
+  const filteredItems = useMemo(() => {
+    return menuItems.filter(item => {
+        if (!item.roles) return true;
+        return item.roles.includes(userRole as UserRole);
+    });
+  }, [userRole]);
 
   return (
     <div className="h-full w-full bg-white dark:bg-[#0B1121] flex flex-col relative overflow-hidden">
-      <div className="p-4 pt-6 pb-2 flex items-center justify-between shrink-0">
+      <div className="p-4 pt-6 pb-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
             <AppLogo className="w-9 h-9" />
             <div>
@@ -81,28 +125,30 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-4 scrollbar-hide">
-        {(Object.entries(sections) as [string, SidebarItem[]][]).map(([section, items]) => (
-            <div key={section} className="space-y-0.5">
-                <div className="px-2 mb-1">
-                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">{section}</span>
-                </div>
-                {items.map((item, idx) => (
-                    <button
-                        key={idx}
-                        onClick={() => { onNavigate(item.view); if (onClose) onClose(); }}
-                        className={`w-full flex items-center gap-3 px-2.5 py-1.5 rounded-lg transition-all ${
-                            currentView === item.view
-                            ? 'bg-indigo-600 text-white shadow-md'
-                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                        }`}
-                    >
-                        <item.icon className={`w-4 h-4 ${currentView === item.view ? 'text-white' : 'text-slate-400 dark:text-slate-500'}`} />
-                        <span className="text-[11px] font-bold text-left tracking-tight flex-1">{item.label}</span>
-                        {currentView === item.view && <div className="w-1 h-1 rounded-full bg-white"></div>}
-                    </button>
-                ))}
-            </div>
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5 scrollbar-hide">
+        {filteredItems.map((item, idx) => (
+            <button
+                key={idx}
+                onClick={() => { 
+                    if (item.url) {
+                        window.open(item.url, '_blank');
+                    } else if (item.view) {
+                        onNavigate(item.view); 
+                    }
+                    if (onClose) onClose(); 
+                }}
+                className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition-all ${
+                    !item.url && currentView === item.view
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                }`}
+            >
+                <item.icon className={`w-3.5 h-3.5 ${!item.url && currentView === item.view ? 'text-white' : 'text-slate-400 dark:text-slate-500'}`} />
+                <span className="text-[10.5px] font-bold text-left tracking-tight flex-1">{item.label}</span>
+                {!item.url && currentView === item.view && (
+                  <div className="w-1 h-1 rounded-full bg-white/40"></div>
+                )}
+            </button>
         ))}
       </div>
 

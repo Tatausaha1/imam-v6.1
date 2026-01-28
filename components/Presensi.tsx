@@ -59,9 +59,9 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
     const loadData = async () => {
         if (isMockMode) {
             setAllStudents([
-                { id: '1', namaLengkap: 'ADELIA SRI SUNDARI', tingkatRombel: 'XII IPA 1', nisn: '0086806447', status: 'Aktif', jenisKelamin: 'Perempuan' } as any,
-                { id: '2', namaLengkap: 'AHMAD DAHLAN', tingkatRombel: 'X IPA 1', nisn: '0086806448', status: 'Aktif', jenisKelamin: 'Laki-laki' } as any,
-                { id: '3', namaLengkap: 'BUDI SANTOSO', tingkatRombel: 'XI IPS 2', nisn: '0086806449', status: 'Aktif', jenisKelamin: 'Laki-laki' } as any
+                { id: '1', namaLengkap: 'ADELIA SRI SUNDARI', tingkatRombel: 'XII IPA 1', nisn: '0086806447', status: 'Aktif', jenisKelamin: 'Perempuan', idUnik: '25002' } as any,
+                { id: '2', namaLengkap: 'AHMAD DAHLAN', tingkatRombel: 'X IPA 1', nisn: '0086806448', status: 'Aktif', jenisKelamin: 'Laki-laki', idUnik: '25010' } as any,
+                { id: '3', namaLengkap: 'BUDI SANTOSO', tingkatRombel: 'XI IPS 2', nisn: '0086806449', status: 'Aktif', jenisKelamin: 'Laki-laki', idUnik: '25015' } as any
             ]);
             setClassList([
                 { name: 'X IPA 1', level: '10', teacherName: 'Budi Santoso, S.Pd', captainName: 'Ahmad Dahlan' },
@@ -129,7 +129,7 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
             id: `${s.id}_${format(date, "yyyy-MM-dd")}`,
             studentId: s.id!, studentName: s.namaLengkap, class: s.tingkatRombel,
             status: 'Alpha', checkIn: null, checkOut: null, duha: null, zuhur: null, ashar: null,
-            jenisKelamin: s.jenisKelamin
+            jenisKelamin: s.jenisKelamin, idUnik: s.idUnik
         } as any);
     });
   }, [allStudents, attendanceSnapshot, searchTerm, activeGrade, activeClass, date, classList]);
@@ -141,40 +141,6 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
       return { total, hadir, alpa: total - hadir, pct };
   }, [displayData]);
 
-  const handleQuickHaidAction = async (record: AttendanceRecord) => {
-      if (record.status === 'Haid') {
-          toast.info("Status sudah Haid.");
-          return;
-      }
-
-      const student = allStudents.find(s => s.id === record.studentId);
-      if (student?.jenisKelamin === 'Laki-laki') {
-          toast.error("Mode Haid hanya untuk siswi perempuan.");
-          return;
-      }
-
-      const toastId = toast.loading("Mencatat Mode Haid...");
-      try {
-          const payload = {
-              ...record,
-              status: 'Haid',
-              duha: 'Haid',
-              zuhur: 'Haid',
-              ashar: 'Haid',
-              lastUpdated: new Date().toISOString()
-          };
-
-          if (isMockMode) {
-              await new Promise(r => setTimeout(r, 500));
-          } else if (db) {
-              await db.collection("attendance").doc(record.id).set(payload, { merge: true });
-          }
-          toast.success("Status Haid berhasil dicatat!", { id: toastId });
-      } catch (e) {
-          toast.error("Gagal mencatat status.", { id: toastId });
-      }
-  };
-
   const handleEditClick = (record: AttendanceRecord) => {
       if (isHaidMode) {
           handleQuickHaidAction(record);
@@ -184,14 +150,27 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
       setIsModalOpen(true);
   };
 
+  const handleQuickHaidAction = async (record: AttendanceRecord) => {
+      if (record.status === 'Haid') return;
+      const student = allStudents.find(s => s.id === record.studentId);
+      if (student?.jenisKelamin === 'Laki-laki') {
+          toast.error("Mode Haid hanya untuk siswi.");
+          return;
+      }
+      try {
+          const payload = { ...record, status: 'Haid' };
+          if (!isMockMode && db) await db.collection("attendance").doc(record.id).set(payload, { merge: true });
+          toast.success(`${record.studentName} dicatat Haid`);
+      } catch (e) { toast.error("Gagal mencatat status."); }
+  };
+
   const handleSaveManualEdit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!editingRecord) return;
       setSaving(true);
       try {
-          if (isMockMode) await new Promise(r => setTimeout(r, 500));
-          else if (db) await db.collection("attendance").doc(editingRecord.id).set(editingRecord, { merge: true });
-          toast.success("Data kehadiran diperbarui.");
+          if (!isMockMode && db) await db.collection("attendance").doc(editingRecord.id).set(editingRecord, { merge: true });
+          toast.success("Data diperbarui.");
           setIsModalOpen(false);
       } catch (e) { toast.error("Gagal menyimpan."); } finally { setSaving(false); }
   };
@@ -215,7 +194,8 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
   const handleExportPDF = async () => {
     if (loading) { toast.error("Memuat data..."); return; }
     if (displayData.length === 0) { toast.error("Tidak ada data."); return; }
-    const toastId = toast.loading("Menyiapkan PDF Resmi...");
+    const toastId = toast.loading("Membangun Dokumen PDF Resmi...");
+    
     try {
         const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
         const pageWidth = doc.internal.pageSize.getWidth();
@@ -223,75 +203,119 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
         const margin = 15;
         const dateStr = format(date, 'EEEE, dd MMMM yyyy', { locale: localeID });
 
+        // --- ARSITEKTUR KOP SURAT ---
         const logoData = await getLogoBase64();
-        if (logoData) { doc.addImage(logoData, 'PNG', margin, 8, 18, 18); }
-
-        const clsInfo = classList.find(c => c.name === activeClass) || { teacherName: "............................", captainName: "............................" };
-
-        const maleStudentsCount = allStudents.filter(s => (activeClass === 'All' || s.tingkatRombel === activeClass) && s.jenisKelamin === 'Laki-laki').length;
-        const femaleStudentsCount = allStudents.filter(s => (activeClass === 'All' || s.tingkatRombel === activeClass) && s.jenisKelamin === 'Perempuan').length;
+        if (logoData) { doc.addImage(logoData, 'PNG', margin, 10, 18, 18); }
 
         doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-        doc.text("KEMENTERIAN AGAMA REPUBLIK INDONESIA", centerX + 10, 12, { align: "center" });
+        doc.text("KEMENTERIAN AGAMA REPUBLIK INDONESIA", centerX + 8, 14, { align: "center" });
         doc.setFontSize(11);
-        doc.text("KANTOR KEMENTERIAN AGAMA KABUPATEN HULU SUNGAI TENGAH", centerX + 10, 17, { align: "center" });
+        doc.text("KANTOR KEMENTERIAN AGAMA KABUPATEN HULU SUNGAI TENGAH", centerX + 8, 19, { align: "center" });
         doc.setFontSize(12);
-        doc.text((madrasahInfo?.nama || "MAN 1 HULU SUNGAI TENGAH").toUpperCase(), centerX + 10, 22, { align: "center" });
+        doc.text((madrasahInfo?.nama || "MAN 1 HULU SUNGAI TENGAH").toUpperCase(), centerX + 8, 24, { align: "center" });
         doc.setFontSize(8); doc.setFont("helvetica", "normal");
-        doc.text(madrasahInfo?.alamat || "Jl. H. Damanhuri No. 12 Barabai", centerX + 10, 26, { align: "center" });
-        doc.setLineWidth(0.6); doc.line(margin, 28, pageWidth - margin, 28);
-        doc.setLineWidth(0.2); doc.line(margin, 29, pageWidth - margin, 29);
+        doc.text(madrasahInfo?.alamat || "Jl. H. Damanhuri No. 12 Barabai", centerX + 8, 28, { align: "center" });
+        doc.setLineWidth(0.6); doc.line(margin, 30, pageWidth - margin, 30);
+        doc.setLineWidth(0.2); doc.line(margin, 31, pageWidth - margin, 31);
 
+        // --- METADATA LAPORAN ---
         doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-        doc.text("LAPORAN HARIAN PRESENSI SISWA", centerX, 38, { align: "center" });
+        doc.text("LAPORAN HARIAN PRESENSI & IBADAH SISWA", centerX, 40, { align: "center" });
+        
         doc.setFontSize(8); doc.setFont("helvetica", "normal");
-        doc.text(`Hari/Tanggal : ${dateStr}`, margin, 48);
-        doc.text(`Rombel / Tk  : ${activeClass === 'All' ? 'SEMUA ROMBEL' : activeClass.toUpperCase()}`, margin, 53);
-        doc.setFont("helvetica", "bold");
-        doc.text(`Populasi     : ${displayData.length} (L: ${maleStudentsCount}, P: ${femaleStudentsCount})`, margin, 58);
-        doc.setFont("helvetica", "normal");
+        doc.text(`Hari/Tanggal : ${dateStr}`, margin, 50);
+        doc.text(`Rombel / Tk  : ${activeClass === 'All' ? 'SEMUA ROMBEL' : activeClass.toUpperCase()}`, margin, 55);
+        
+        const maleCount = displayData.filter(d => d.jenisKelamin === 'Laki-laki').length;
+        const femaleCount = displayData.length - maleCount;
+        doc.text(`Populasi     : ${displayData.length} SISWA (L: ${maleCount}, P: ${femaleCount})`, margin, 60);
 
-        const formatTimeVal = (val: string | null) => {
+        const formatTimeWithStatus = (val: string | null, status: string, isIbadah: boolean) => {
             if (!val) return '-';
-            if (val === 'Haid') return 'HD';
-            return val.substring(0, 5);
+            const cleanTime = val.substring(0, 5);
+            if (status === 'Haid' && isIbadah) return `${cleanTime} (Haid)`;
+            return cleanTime;
         };
 
+        // --- ARSITEKTUR TABEL 10 KOLOM LENGKAP ---
         autoTable(doc, {
-            startY: 63,
-            head: [['NO', 'NAMA SISWA', 'KELAS', 'MSK', 'DHA', 'ZHR', 'ASR', 'PLG', 'KET']],
+            startY: 65,
+            head: [['NO', 'ID UNIK', 'NAMA LENGKAP SISWA', 'KLS', 'MSK', 'DHA', 'ZHR', 'ASR', 'PLG', 'ST']],
             body: displayData.map((r, i) => [
-                i + 1, (r.studentName || '').toUpperCase(), r.class,
-                formatTimeVal(r.checkIn), formatTimeVal(r.duha), formatTimeVal(r.zuhur), 
-                formatTimeVal(r.ashar), formatTimeVal(r.checkOut),
-                r.status === 'Alpha' ? 'A' : r.status === 'Terlambat' ? 'T' : r.status === 'Haid' ? 'HD' : r.status.substring(0,1)
+                i + 1, r.idUnik || '-', r.studentName.toUpperCase(), r.class.replace('IPA ', '').replace('IPS ', ''),
+                formatTimeWithStatus(r.checkIn, r.status, false), 
+                formatTimeWithStatus(r.duha, r.status, true), 
+                formatTimeWithStatus(r.zuhur, r.status, true), 
+                formatTimeWithStatus(r.ashar, r.status, true), 
+                formatTimeWithStatus(r.checkOut, r.status, false),
+                r.status === 'Alpha' ? 'A' : r.status === 'Terlambat' ? 'T' : r.status === 'Haid' ? 'HD' : 'H'
             ]),
-            headStyles: { fillColor: [67, 56, 202], halign: 'center', fontSize: 7, textColor: [255, 255, 255] },
-            styles: { fontSize: 7, font: 'helvetica', cellPadding: 2 },
-            columnStyles: { 0: { halign: 'center' }, 8: { halign: 'center' } },
-            didDrawCell: (data) => { if (data.section === 'body' && data.row.cells[8].text[0] === 'HD') { doc.setFillColor(255, 241, 242); } }
+            headStyles: { fillColor: [43, 58, 85], halign: 'center', fontSize: 6.5, textColor: [255, 255, 255] },
+            styles: { fontSize: 6.5, font: 'helvetica', cellPadding: 1.5 },
+            columnStyles: { 
+                0: { halign: 'center', cellWidth: 7 }, 
+                1: { halign: 'center', cellWidth: 14 },
+                3: { halign: 'center', cellWidth: 10 }, 
+                4: { halign: 'center', cellWidth: 12 }, 
+                5: { halign: 'center', cellWidth: 15 }, 
+                6: { halign: 'center', cellWidth: 15 }, 
+                7: { halign: 'center', cellWidth: 15 }, 
+                8: { halign: 'center', cellWidth: 12 }, 
+                9: { halign: 'center', cellWidth: 8 } 
+            },
+            didDrawCell: (data) => {
+                if (data.section === 'body') {
+                    const cellText = data.cell.text.join(' ');
+                    const statusVal = data.row.cells[9].text[0];
+
+                    if (cellText.includes('(Haid)') || statusVal === 'HD') {
+                        doc.setTextColor(225, 29, 72); // Merah Haid
+                    } else if (statusVal === 'T') {
+                        doc.setTextColor(217, 119, 6); // Oranye Terlambat
+                    } else if (statusVal === 'A') {
+                        doc.setTextColor(185, 28, 28); // Merah Alpa
+                    } else {
+                        doc.setTextColor(43, 58, 85);
+                    }
+                }
+            }
         });
 
+        // --- ARSITEKTUR VALIDASI (TANDA TANGAN) ---
         const finalY = (doc as any).lastAutoTable.finalY + 15;
+        const clsInfo = classList.find(c => c.name === activeClass) || { teacherName: "............................", captainName: "............................" };
+
         if (finalY + 50 < 290) {
-            doc.setFontSize(8); doc.text("Barabai, " + format(new Date(), "dd MMMM yyyy", { locale: localeID }), pageWidth - margin - 50, finalY);
-            doc.text("Ketua Kelas,", margin + 10, finalY + 5);
-            doc.setFont("helvetica", "bold"); doc.text((clsInfo.captainName || "............................").toUpperCase(), margin + 10, finalY + 25);
-            doc.setFont("helvetica", "normal"); doc.text("Wali Rombel,", pageWidth - margin - 50, finalY + 5);
-            doc.setFont("helvetica", "bold"); doc.text((clsInfo.teacherName || "............................").toUpperCase(), pageWidth - margin - 50, finalY + 25);
-            doc.setFont("helvetica", "normal"); doc.text("Mengetahui,", centerX, finalY + 32, { align: 'center' });
-            doc.setFont("helvetica", "bold"); doc.text("Kepala Madrasah,", centerX, finalY + 37, { align: 'center' });
-            doc.text((madrasahInfo?.kepalaNama || "Drs. H. Syamsul Arifin").toUpperCase(), centerX, finalY + 55, { align: 'center' });
-            doc.setFont("helvetica", "normal"); doc.text("NIP. " + (madrasahInfo?.kepalaNip || "196808171995031002"), centerX, finalY + 59, { align: 'center' });
+            doc.setFontSize(8);
+            doc.text(`Barabai, ${format(new Date(), 'dd MMMM yyyy', { locale: localeID })}`, pageWidth - margin - 45, finalY);
+            
+            doc.text("Ketua Kelas,", margin + 5, finalY + 5);
+            doc.setFont("helvetica", "bold");
+            doc.text((clsInfo.captainName || "............................").toUpperCase(), margin + 5, finalY + 25);
+            
+            doc.setFont("helvetica", "normal");
+            doc.text("Wali Rombel,", pageWidth - margin - 45, finalY + 5);
+            doc.setFont("helvetica", "bold");
+            doc.text((clsInfo.teacherName || "............................").toUpperCase(), pageWidth - margin - 45, finalY + 25);
+            
+            doc.setFont("helvetica", "normal");
+            doc.text("Mengetahui,", centerX, finalY + 32, { align: 'center' });
+            doc.text("Kepala Madrasah,", centerX, finalY + 37, { align: 'center' });
+            doc.setFont("helvetica", "bold");
+            doc.text((madrasahInfo?.kepalaNama || "............................").toUpperCase(), centerX, finalY + 55, { align: 'center' });
+            doc.setFont("helvetica", "normal");
+            doc.text(`NIP. ${madrasahInfo?.kepalaNip || "............................"}`, centerX, finalY + 59, { align: 'center' });
         }
 
-        doc.save(`PRESENSI_${activeClass}_${format(date, 'yyyyMMdd')}.pdf`);
-        toast.success("PDF Berhasil Diunduh", { id: toastId });
-    } catch (e) { toast.error("Gagal mencetak laporan", { id: toastId }); }
+        doc.save(`PRESENSI_IMAM_${activeClass.replace(' ', '_')}_${format(date, 'yyyyMMdd')}.pdf`);
+        toast.success("PDF Berhasil Dibuat", { id: toastId });
+    } catch (e) { 
+        console.error(e);
+        toast.error("Gagal mencetak laporan PDF.", { id: toastId }); 
+    }
   };
 
-  const SessionPill = ({ label, time, color }: { label: string, time: string | null, color: string }) => {
-      const isHaid = time === 'Haid';
+  const SessionPill = ({ label, time, color, isHaid }: { label: string, time: string | null, color: string, isHaid: boolean }) => {
       const isFilled = !!time;
       return (
         <div className={`flex-1 flex flex-col items-center gap-1.5 p-2 rounded-2xl border transition-all ${
@@ -304,13 +328,9 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
             <span className={`text-[6px] font-black uppercase tracking-tighter ${isFilled ? isHaid ? 'text-rose-600' : `text-${color}-600 dark:text-${color}-400` : 'text-slate-400'}`}>
                 {label}
             </span>
-            {isHaid ? (
-                <HeartIcon className="w-3 h-3 text-rose-500 animate-pulse" />
-            ) : (
-                <span className={`text-[10px] font-mono font-black ${isFilled ? 'text-slate-800 dark:text-white' : 'text-slate-300'}`}>
-                    {isFilled ? time!.substring(0, 5) : '--:--'}
-                </span>
-            )}
+            <span className={`text-[10px] font-mono font-black ${isFilled ? isHaid ? 'text-rose-600' : 'text-slate-800 dark:text-white' : 'text-slate-300'}`}>
+                {isFilled ? time!.substring(0, 5) : '--:--'}
+            </span>
         </div>
       );
   };
@@ -325,7 +345,7 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
                   <h2 className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight leading-none">Presensi Harian</h2>
                   <div className="flex items-center gap-2 mt-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                    <p className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Database Live</p>
+                    <p className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Arsitektur Terpadu</p>
                   </div>
               </div>
           </div>
@@ -403,7 +423,6 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
                             <ChevronDownIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                         </div>
                         
-                        {/* MODE HAID TOGGLE */}
                         <button 
                             onClick={() => setIsHaidMode(!isHaidMode)}
                             className={`flex items-center gap-2 px-6 py-4 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all border shadow-sm active:scale-95 ${isHaidMode ? 'bg-rose-600 border-rose-500 text-white shadow-rose-200 dark:shadow-none' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'}`}
@@ -420,17 +439,19 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
                   {loading ? (
                       <div className="py-20 text-center flex flex-col items-center gap-3 animate-pulse"><Loader2 className="w-10 h-10 animate-spin text-indigo-500 opacity-20" /><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sinkronisasi Log Absensi...</p></div>
                   ) : displayData.length > 0 ? (
-                      displayData.map((record, idx) => (
+                      displayData.map((record, idx) => {
+                          const isHaidStatus = record.status === 'Haid';
+                          return (
                           <div key={record.id} className="bg-white dark:bg-[#151E32] p-5 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden animate-in fade-in slide-in-from-bottom-4" style={{ animationDelay: `${idx * 20}ms` }}>
-                              <div className="absolute top-0 left-0 w-1.5 h-full bg-slate-50 dark:bg-slate-800 group-hover:bg-indigo-500 transition-colors"></div>
+                              <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors ${isHaidStatus ? 'bg-rose-500' : 'bg-slate-50 dark:bg-slate-800 group-hover:bg-indigo-500'}`}></div>
                               
                               <div className="flex items-start justify-between mb-6 pl-2">
                                   <div className="flex items-center gap-4 min-w-0 flex-1">
-                                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-lg shrink-0 border-2 transition-all group-hover:scale-110 ${record.status === 'Haid' ? 'bg-rose-50 text-rose-600 border-rose-100 shadow-rose-100/50' : record.status === 'Alpha' ? 'bg-slate-50 text-slate-300 border-slate-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100 shadow-indigo-100/50'}`}>
-                                          {record.status === 'Haid' ? <HeartIcon className="w-7 h-7 fill-current animate-pulse" /> : (record.studentName || '?').charAt(0)}
+                                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-lg shrink-0 border-2 transition-all group-hover:scale-110 ${isHaidStatus ? 'bg-rose-50 text-rose-600 border-rose-100 shadow-rose-100/50' : record.status === 'Alpha' ? 'bg-slate-50 text-slate-300 border-slate-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100 shadow-indigo-100/50'}`}>
+                                          {isHaidStatus ? <HeartIcon className="w-7 h-7 fill-current animate-pulse" /> : (record.studentName || '?').charAt(0)}
                                       </div>
                                       <div className="min-w-0">
-                                          <h4 className="font-black text-slate-800 dark:text-white text-sm uppercase tracking-tight truncate leading-tight">{(record.studentName || 'Siswa').toUpperCase()}</h4>
+                                          <h4 className={`font-black text-sm uppercase tracking-tight truncate leading-tight ${isHaidStatus ? 'text-rose-600' : 'text-slate-800 dark:text-white'}`}>{(record.studentName || 'Siswa').toUpperCase()}</h4>
                                           <div className="flex items-center gap-2 mt-1.5">
                                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{record.class || '-'}</span>
                                               <span className="text-slate-200 dark:text-slate-700">•</span>
@@ -438,28 +459,25 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
                                           </div>
                                       </div>
                                   </div>
-                                  <button 
-                                    onClick={() => handleEditClick(record)} 
-                                    className={`p-3 rounded-2xl transition-all ${isHaidMode ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-600' : 'bg-slate-50 dark:bg-slate-900 text-slate-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100'}`}
-                                  >
+                                  <button onClick={() => handleEditClick(record)} className={`p-3 rounded-2xl transition-all ${isHaidMode ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-600' : 'bg-slate-50 dark:bg-slate-900 text-slate-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100'}`}>
                                     {isHaidMode ? <HeartIcon className="w-5 h-5 fill-current animate-pulse" /> : <PencilIcon className="w-4 h-4" />}
                                   </button>
                               </div>
 
                               <div className="flex gap-2.5 pl-2 cursor-pointer" onClick={() => handleEditClick(record)}>
-                                  <SessionPill label="MSK" time={record.checkIn} color="emerald" />
-                                  <SessionPill label="DHA" time={record.duha} color="violet" />
-                                  <SessionPill label="ZHR" time={record.zuhur} color="blue" />
-                                  <SessionPill label="ASR" time={record.ashar} color="amber" />
-                                  <SessionPill label="PLG" time={record.checkOut} color="rose" />
+                                  <SessionPill label="MSK" time={record.checkIn} color="emerald" isHaid={isHaidStatus} />
+                                  <SessionPill label="DHA" time={record.duha} color="violet" isHaid={isHaidStatus} />
+                                  <SessionPill label="ZHR" time={record.zuhur} color="blue" isHaid={isHaidStatus} />
+                                  <SessionPill label="ASR" time={record.ashar} color="amber" isHaid={isHaidStatus} />
+                                  <SessionPill label="PLG" time={record.checkOut} color="rose" isHaid={isHaidStatus} />
                               </div>
                           </div>
-                      ))
+                          );
+                      })
                   ) : (
                       <div className="py-32 text-center bg-white dark:bg-slate-800 rounded-[3rem] border border-dashed border-slate-200 dark:border-slate-800">
                           <UsersIcon className="w-16 h-16 text-slate-100 dark:text-slate-700 mx-auto mb-6" />
-                          <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest">Tidak Ada Data Ditemukan</h3>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-2">Coba sesuaikan filter atau kata kunci pencarian</p>
+                          <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest">Data Tidak Ditemukan</h3>
                       </div>
                   )}
               </div>
@@ -469,7 +487,7 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
       {/* MANUAL EDIT MODAL */}
       {isModalOpen && editingRecord && (
           <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-              <div className="bg-white dark:bg-[#0B1121] w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in duration-300 border border-white/10">
+              <div className="bg-white dark:bg-[#0B1121] w-full max-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in duration-300 border border-white/10">
                   <div className="flex justify-between items-center mb-6">
                       <h3 className="font-black text-slate-800 dark:text-white uppercase text-sm tracking-tight">Koreksi Kehadiran</h3>
                       <button onClick={() => setIsModalOpen(false)}><XCircleIcon className="w-8 h-8 text-slate-400"/></button>
