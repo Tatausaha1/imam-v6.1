@@ -70,7 +70,7 @@ const MadrasahInfo: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     visi: 'Mewujudkan Madrasah yang Islami, Mandiri, Amanah, dan Maju melalui keunggulan akademik dan akhlak mulia.',
     misi: [
       'Menanamkan nilai-nilai religius dalam setiap aspek pembelajaran.',
-      'Meningkatkan kompetensi guru dan tenaga kependidikan.',
+      'Metingkatkan kompetensi guru dan tenaga kependidikan.',
       'Menyediakan fasilitas pembelajaran berbasis teknologi modern.',
       'Membangun karakter siswa yang tangguh dan berjiwa sosial.'
     ],
@@ -341,9 +341,9 @@ const MadrasahInfo: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 
                 <div className="absolute bottom-0 left-0 right-0 p-8 flex flex-col md:flex-row items-end justify-between gap-6">
                     <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl p-3 border border-white/20">
-                                <AppLogo className="w-full h-full text-white" />
+                        <div className="flex items-center gap-4 mb-4">
+                            <div className="w-16 h-16 shrink-0">
+                                <AppLogo className="w-full h-full" />
                             </div>
                             <div>
                                 <h1 className="text-xl md:text-3xl font-black text-white uppercase tracking-tight leading-none">{data.nama}</h1>

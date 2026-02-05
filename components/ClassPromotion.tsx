@@ -1,118 +1,67 @@
 
-import React, { useState } from 'react';
-import { ArrowRightIcon, ArrowTrendingUpIcon, CheckCircleIcon } from './Icons';
+/**
+ * @license
+ * IMAM System - Integrated Madrasah Academic Manager
+ */
+
+import React from 'react';
+import Layout from './Layout';
+import { 
+  ArrowTrendingUpIcon, Loader2, CommandLineIcon, SparklesIcon 
+} from './Icons';
 
 interface ClassPromotionProps {
   onBack: () => void;
 }
 
 const ClassPromotion: React.FC<ClassPromotionProps> = ({ onBack }) => {
-  const [processing, setProcessing] = useState(false);
-  const [completed, setCompleted] = useState(false);
-
-  const handlePromote = () => {
-    setProcessing(true);
-    setTimeout(() => {
-      setProcessing(false);
-      setCompleted(true);
-    }, 2000);
-  };
-
-  if (completed) {
-    return (
-      <div className="flex flex-col h-full bg-[#f8fafc] dark:bg-slate-900 items-center justify-center p-8 transition-colors">
-        <div className="w-24 h-24 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-6">
-          <CheckCircleIcon className="w-12 h-12 text-green-600 dark:text-green-400 animate-checkmark" />
-        </div>
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-white text-center mb-2">Proses Berhasil!</h2>
-        <p className="text-slate-500 dark:text-slate-400 text-center mb-8">Semua siswa yang memenuhi syarat telah dinaikkan ke tingkat berikutnya.</p>
-        <button 
-          onClick={onBack}
-          className="w-full bg-slate-900 dark:bg-slate-700 text-white py-4 rounded-2xl font-bold shadow-xl active:scale-95 transition-transform"
-        >
-          Kembali ke Dashboard
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col h-full bg-[#f8fafc] dark:bg-slate-900 transition-colors">
-      <div className="bg-white dark:bg-slate-800 shadow-sm p-4 pt-8 flex items-center gap-4 z-10 sticky top-0 border-b border-slate-100 dark:border-slate-700">
-        <button onClick={onBack} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">
-           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
-            </svg>
-        </button>
-        <div>
-          <h2 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            Kenaikan Kelas <ArrowTrendingUpIcon className="w-5 h-5 text-fuchsia-500" />
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Tahun Ajaran 2023/2024</p>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6 pb-24">
-        <div className="bg-fuchsia-50 dark:bg-fuchsia-900/20 border border-fuchsia-100 dark:border-fuchsia-900/30 rounded-2xl p-6 mb-6">
-          <h3 className="font-bold text-fuchsia-800 dark:text-fuchsia-300 text-lg mb-2">Ringkasan Kenaikan</h3>
-          <div className="space-y-3">
-             <div className="flex justify-between text-sm">
-                <span className="text-slate-600 dark:text-slate-400">Total Siswa</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">842</span>
-             </div>
-             <div className="flex justify-between text-sm">
-                <span className="text-slate-600 dark:text-slate-400">Memenuhi Syarat</span>
-                <span className="font-bold text-green-600 dark:text-green-400">810</span>
-             </div>
-             <div className="flex justify-between text-sm">
-                <span className="text-slate-600 dark:text-slate-400">Perlu Tinjauan</span>
-                <span className="font-bold text-orange-500 dark:text-orange-400">32</span>
-             </div>
+    <Layout 
+      title="Kenaikan Kelas" 
+      subtitle="Kernel Module v6.1" 
+      icon={ArrowTrendingUpIcon} 
+      onBack={onBack}
+    >
+      <div className="flex flex-col items-center justify-center min-h-[70vh] p-8 text-center animate-in fade-in zoom-in duration-700">
+          
+          {/* Animated Icon Container */}
+          <div className="relative mb-10">
+              <div className="w-24 h-24 bg-fuchsia-50 dark:bg-fuchsia-900/20 rounded-[2.5rem] flex items-center justify-center relative">
+                  <ArrowTrendingUpIcon className="w-10 h-10 text-fuchsia-500 opacity-20" />
+                  <div className="absolute inset-0 border-4 border-fuchsia-500/20 border-t-fuchsia-500 rounded-[2.5rem] animate-spin"></div>
+              </div>
+              <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white dark:bg-slate-800 rounded-2xl shadow-xl flex items-center justify-center border border-slate-100 dark:border-slate-700">
+                  <CommandLineIcon className="w-5 h-5 text-amber-500" />
+              </div>
           </div>
-        </div>
 
-        <div className="space-y-4 mb-8">
-           <h3 className="font-bold text-slate-700 dark:text-slate-300">Aksi Massal</h3>
-           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4 transition-colors">
-              <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                 <span className="font-bold text-slate-500 dark:text-slate-400">X</span>
-              </div>
-              <div className="flex-1">
-                 <div className="font-bold text-slate-800 dark:text-slate-200">Kelas X &rarr; XI</div>
-                 <div className="text-xs text-slate-500 dark:text-slate-400">280 Siswa</div>
-              </div>
-              <div className="w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-600"></div>
-           </div>
-           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4 transition-colors">
-              <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                 <span className="font-bold text-slate-500 dark:text-slate-400">XI</span>
-              </div>
-              <div className="flex-1">
-                 <div className="font-bold text-slate-800 dark:text-slate-200">Kelas XI &rarr; XII</div>
-                 <div className="text-xs text-slate-500 dark:text-slate-400">275 Siswa</div>
-              </div>
-              <div className="w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-600"></div>
-           </div>
-        </div>
+          {/* Status Badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-50 dark:bg-amber-900/20 rounded-full border border-amber-100 dark:border-amber-800 mb-6">
+              <SparklesIcon className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+              <span className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">Pembaruan Kernel</span>
+          </div>
 
-        <button 
-          onClick={handlePromote}
-          disabled={processing}
-          className="w-full bg-fuchsia-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-fuchsia-200 dark:shadow-none hover:bg-fuchsia-700 transition-all flex items-center justify-center"
-        >
-          {processing ? (
-             <span className="flex items-center gap-2">
-               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-               Memproses...
-             </span>
-          ) : (
-             <span className="flex items-center">
-               Proses Kenaikan Kelas <ArrowRightIcon className="w-5 h-5 ml-2" />
-             </span>
-          )}
-        </button>
+          {/* Text Content */}
+          <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-3">Modul Dalam Pengembangan</h2>
+          
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed font-medium">
+              Sistem sedang melakukan sinkronisasi data akademik akhir tahun dan validasi otomatis kriteria kelulusan. Fitur kenaikan kelas massal akan segera aktif dalam rilis kernel berikutnya.
+          </p>
+
+          {/* Action Button */}
+          <div className="mt-12 flex flex-col gap-3 w-full max-w-xs">
+              <button 
+                onClick={onBack}
+                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-500/20 active:scale-95 transition-all"
+              >
+                Kembali ke Dashboard
+              </button>
+              <p className="text-[8px] font-mono text-slate-400 dark:text-slate-600 uppercase tracking-widest">
+                Kernel build: v6.1.4-promotion-sync
+              </p>
+          </div>
       </div>
-    </div>
+    </Layout>
   );
 };
 

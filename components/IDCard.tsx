@@ -28,7 +28,7 @@ const IDCard: React.FC<IDCardProps> = ({ onBack }) => {
         if (isMockMode) {
             setTimeout(() => {
                 setData({
-                    nama: "DIENDE ADELLYA AQILLA",
+                    nama: "Diende Adellya Aqilla",
                     nisn: "0086806447",
                     idUnik: "15012", 
                     rombel: "XII A",
@@ -48,7 +48,7 @@ const IDCard: React.FC<IDCardProps> = ({ onBack }) => {
                     setData({
                         nama: userData?.displayName || auth.currentUser.displayName || "Siswa",
                         nisn: userData?.nisn || "-",
-                        idUnik: userData?.idUnik || "00000", // Hanya gunakan idUnik tanpa cadangan NISN
+                        idUnik: userData?.idUnik || "00000",
                         rombel: userData?.tingkatRombel || userData?.class || "-",
                         ttl: "-", 
                         alamat: userData?.address || "-"
@@ -81,14 +81,12 @@ const IDCard: React.FC<IDCardProps> = ({ onBack }) => {
       height: '100%',
   };
 
-  // Hanya gunakan idUnik untuk QR Code
   const qrValue = data?.idUnik || "0";
 
   return (
     <Layout title="ID Digital" subtitle="Kartu Identitas Terintegrasi" icon={QrCodeIcon} onBack={onBack}>
       <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-12 bg-slate-100 dark:bg-slate-950 min-h-full">
         
-        {/* Scale Wrapper for Small Screens */}
         <div className="w-full max-w-[420px] scale-[0.85] xs:scale-100 transition-transform origin-center" style={cardContainerStyle}>
             <div 
                 className="relative w-full aspect-[1.586/1] cursor-pointer drop-shadow-[0_20px_50px_rgba(0,0,0,0.15)] dark:drop-shadow-[0_20px_50px_rgba(0,0,0,0.4)]"
@@ -106,7 +104,6 @@ const IDCard: React.FC<IDCardProps> = ({ onBack }) => {
                     </div>
 
                     <div className="flex-1 p-5 flex gap-5 relative bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-slate-50 via-white to-white">
-                        {/* Profile Picture */}
                         <div className="w-[30%] aspect-[3/4] bg-slate-100 rounded-2xl border border-slate-200/50 flex items-center justify-center shrink-0 overflow-hidden relative self-center shadow-xl ring-4 ring-white">
                             {data?.foto ? (
                                 <img src={data.foto} alt="Foto" className="w-full h-full object-cover" />
@@ -116,7 +113,6 @@ const IDCard: React.FC<IDCardProps> = ({ onBack }) => {
                             <div className="absolute bottom-0 w-full bg-indigo-600/95 text-white text-[7px] font-black text-center py-1.5 tracking-[0.2em] uppercase">SISWA</div>
                         </div>
 
-                        {/* Student Details */}
                         <div className="flex-1 flex flex-col justify-center gap-2 min-w-0">
                             {loading ? (
                                 <div className="space-y-2 animate-pulse"><div className="h-4 bg-slate-100 rounded w-full"></div><div className="h-3 bg-slate-50 rounded w-2/3"></div></div>
@@ -124,7 +120,7 @@ const IDCard: React.FC<IDCardProps> = ({ onBack }) => {
                                 <>
                                     <div className="mb-1">
                                         <p className="text-[7px] text-indigo-500 uppercase font-black tracking-widest leading-none mb-1">Nama Lengkap</p>
-                                        <h2 className="text-[13px] font-black text-slate-800 leading-tight uppercase truncate">{data?.nama}</h2>
+                                        <h2 className="text-[13px] font-black text-slate-800 leading-tight truncate pr-1">{data?.nama}</h2>
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="bg-indigo-50/50 p-2 rounded-xl border border-indigo-100/50">

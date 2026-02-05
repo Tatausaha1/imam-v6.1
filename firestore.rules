@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -48,6 +49,16 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow write: if isAdmin() || isStaff();
     }
+    
+    match /alumni/{alumniId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isStaff();
+    }
+    
+    match /mutasi/{mutasiId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isStaff();
+    }
 
     match /teachers/{teacherId} {
       allow read: if isSignedIn();
@@ -96,6 +107,11 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /about_content/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }

@@ -1,298 +1,245 @@
+
+/**
+ * @license
+ * IMAM System - Integrated Madrasah Academic Manager
+ */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import Layout from './Layout';
 import { 
   ClockIcon, 
-  CheckCircleIcon, 
-  XCircleIcon, 
-  EnvelopeIcon, 
-  BanknotesIcon, 
-  Loader2,
-  HeartIcon
+  PlusIcon,
+  XCircleIcon,
+  TrashIcon,
+  Squares2x2Icon,
+  SparklesIcon,
+  Search,
+  CheckCircleIcon,
+  ArrowRightIcon,
+  CogIcon,
+  // Ikon Fitur yang bisa dipilih
+  CalendarIcon, MegaphoneIcon, BuildingLibraryIcon, AcademicCapIcon,
+  ClipboardDocumentListIcon, CameraIcon, ShieldCheckIcon, UserIcon,
+  EnvelopeIcon, ChartBarIcon, IdentificationIcon, BookOpenIcon
 } from './Icons';
-import { db, auth, isMockMode } from '../services/firebase';
-import { UserRole } from '../types';
+import { ViewState, UserRole } from '../types';
+import { toast } from 'sonner';
 
-interface HistoryProps {
-  onBack: () => void;
-  userRole: UserRole;
-}
-
-interface HistoryItem {
+interface ShortcutMenu {
     id: string;
-    type: 'attendance' | 'letter' | 'payment' | 'haid';
-    date: string; // ISO string
-    title: string;
-    subtitle: string;
-    status: 'success' | 'pending' | 'warning' | 'error' | 'haid';
-    amount?: string;
-    meta?: any;
+    label: string;
+    description: string;
+    icon: React.ElementType;
+    view: ViewState;
+    color: string;
+    bg: string;
 }
 
-const History: React.FC<HistoryProps> = ({ onBack, userRole }) => {
-  const [items, setItems] = useState<HistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'all' | 'attendance' | 'letter' | 'payment'>('all');
+const ALL_AVAILABLE_MENUS: ShortcutMenu[] = [
+    { id: 'jadwal', label: 'Jadwal Mingguan', description: 'Cek jadwal KBM per rombel', icon: CalendarIcon, view: ViewState.SCHEDULE, color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-900/30' },
+    { id: 'berita', label: 'Berita Sekolah', description: 'Informasi dan pengumuman terbaru', icon: MegaphoneIcon, view: ViewState.NEWS, color: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-900/30' },
+    { id: 'madrasah', label: 'Profil Madrasah', description: 'Identitas dan legalitas digital', icon: BuildingLibraryIcon, view: ViewState.MADRASAH_INFO, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/30' },
+    { id: 'tugas', label: 'Tugas & Agenda', description: 'Monitoring deadline tugas siswa', icon: ClipboardDocumentListIcon, view: ViewState.ASSIGNMENTS, color: 'text-violet-600', bg: 'bg-violet-50 dark:bg-violet-900/30' },
+    { id: 'nilai', label: 'Rapor & Nilai', description: 'Hasil capaian akademik siswa', icon: AcademicCapIcon, view: ViewState.GRADES, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/30' },
+    { id: 'scanner', label: 'Lensa Presensi', description: 'Scan QR untuk absensi harian', icon: CameraIcon, view: ViewState.SCANNER, color: 'text-teal-600', bg: 'bg-teal-50 dark:bg-teal-900/30' },
+    { id: 'poin', label: 'Kedisiplinan', description: 'Database poin sikap siswa', icon: ShieldCheckIcon, view: ViewState.POINTS, color: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-900/30' },
+    { id: 'idcard', label: 'ID Card Digital', description: 'Kartu pelajar berbasis sistem', icon: IdentificationIcon, view: ViewState.ID_CARD, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/30' },
+    { id: 'surat', label: 'Layanan PTSP', description: 'Pengajuan surat administrasi', icon: EnvelopeIcon, view: ViewState.LETTERS, color: 'text-sky-600', bg: 'bg-sky-50 dark:bg-sky-900/30' },
+    { id: 'profil', label: 'Profil Saya', description: 'Atur identitas dan keamanan', icon: UserIcon, view: ViewState.PROFILE, color: 'text-slate-600', bg: 'bg-slate-50 dark:bg-slate-800' },
+    { id: 'laporan', label: 'Cetak Database', description: 'Export laporan harian/bulanan', icon: ChartBarIcon, view: ViewState.REPORTS, color: 'text-indigo-700', bg: 'bg-indigo-100 dark:bg-indigo-900/40' },
+    { id: 'jurnal', label: 'Jurnal Guru', description: 'Log materi KBM harian', icon: BookOpenIcon, view: ViewState.JOURNAL, color: 'text-pink-600', bg: 'bg-pink-50 dark:bg-pink-900/30' }
+];
 
-  // Helper untuk format Rupiah
-  const formatRupiah = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
-  };
+const History: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => void, userRole: UserRole }> = ({ onBack, onNavigate, userRole }) => {
+  const [pinnedMenus, setPinnedMenus] = useState<ShortcutMenu[]>([]);
+  const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // --- FETCH DATA ---
+  // Muat menu dari localStorage saat mount
   useEffect(() => {
-    const fetchData = async () => {
-        setLoading(true);
-        const uid = auth?.currentUser?.uid || (isMockMode ? 'user-1' : '');
-        const isAdminOrStaff = userRole === UserRole.ADMIN || userRole === UserRole.STAF || userRole === UserRole.KEPALA_MADRASAH || userRole === UserRole.GURU;
-
-        const allItems: HistoryItem[] = [];
-
-        // 1. MODE MOCK (DATA DUMMY)
-        if (isMockMode) {
-            setTimeout(() => {
-                // Mock Payments
-                allItems.push(
-                    { id: 'pay-1', type: 'payment', date: new Date().toISOString(), title: 'SPP Bulan Mei', subtitle: 'Pembayaran Via Transfer', status: 'success', amount: 'Rp 150.000' },
-                    { id: 'pay-2', type: 'payment', date: new Date(Date.now() - 86400000 * 15).toISOString(), title: 'Uang Seragam', subtitle: 'Cicilan 1', status: 'success', amount: 'Rp 300.000' }
-                );
-                // Mock Attendance
-                allItems.push(
-                    { id: 'att-1', type: 'attendance', date: new Date().toISOString(), title: 'Absensi Masuk', subtitle: '07:15 - Tepat Waktu', status: 'success' },
-                    { id: 'att-h', type: 'haid', date: new Date().toISOString(), title: 'Ibadah (Mode Haid)', subtitle: 'Pencatatan Khusus Siswi', status: 'haid' },
-                    { id: 'att-2', type: 'attendance', date: new Date(Date.now() - 86400000).toISOString(), title: 'Absensi Pulang', subtitle: '16:00 - Selesai', status: 'success' }
-                );
-                // Mock Letters
-                allItems.push(
-                    { id: 'let-1', type: 'letter', date: new Date(Date.now() - 86400000 * 2).toISOString(), title: 'Surat Keterangan Aktif', subtitle: 'Menunggu Persetujuan', status: 'pending' }
-                );
-                
-                setItems(allItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-                setLoading(false);
-            }, 800);
-            return;
-        }
-
-        // 2. MODE REAL (FIRESTORE)
-        if (!db) {
-            setLoading(false);
-            return;
-        }
-
+    const saved = localStorage.getItem('imam_pinned_menus');
+    if (saved) {
         try {
-            const promises = [];
-
-            // A. QUERY ATTENDANCE (Kehadiran)
-            let attQuery = db.collection('attendance').orderBy('date', 'desc').limit(20);
-            promises.push(attQuery.get().then(snap => {
-                snap.docs.forEach(doc => {
-                    const data = doc.data();
-                    // Filter sisi klien untuk keamanan sederhana di view list campuran
-                    if (!isAdminOrStaff && data.studentId !== uid && data.userId !== uid) return;
-
-                    const isHaidStatus = data.status === 'Haid';
-
-                    allItems.push({
-                        id: doc.id,
-                        type: isHaidStatus ? 'haid' : 'attendance',
-                        date: data.date + (data.checkIn ? 'T' + data.checkIn : ''), // Combine date+time estimate
-                        title: isHaidStatus ? `Ibadah: ${data.studentName || 'Siswa'} (Haid)` : (data.status === 'Hadir' ? `Hadir: ${data.studentName || 'Siswa'}` : `${data.status}: ${data.studentName}`),
-                        subtitle: isHaidStatus ? 'Tercatat dalam Mode Haid' : (data.checkIn ? `Masuk Pukul ${data.checkIn.substring(0,5)}` : 'Tidak ada data jam'),
-                        status: isHaidStatus ? 'haid' : (data.status === 'Hadir' ? 'success' : data.status === 'Terlambat' ? 'warning' : 'error')
-                    });
-                });
-            }));
-
-            // B. QUERY LETTERS (Surat)
-            let letQuery = db.collection('letters').orderBy('date', 'desc').limit(20);
-            if (!isAdminOrStaff) {
-                letQuery = letQuery.where('userId', '==', uid);
-            }
-            promises.push(letQuery.get().then(snap => {
-                snap.docs.forEach(doc => {
-                    const data = doc.data();
-                    let status: HistoryItem['status'] = 'pending';
-                    
-                    // Map LetterStatus to HistoryItem['status']
-                    if (data.status === 'Signed' || data.status === 'Selesai') status = 'success';
-                    else if (data.status === 'Ditolak') status = 'error';
-                    else if (data.status === 'Verified' || data.status === 'Validated' || data.status === 'Diproses') status = 'warning';
-                    
-                    allItems.push({
-                        id: doc.id,
-                        type: 'letter',
-                        date: data.date,
-                        title: data.type,
-                        subtitle: `${data.userName} • ${data.status}`,
-                        status: status
-                    });
-                });
-            }));
-
-            // C. QUERY PAYMENTS (Pembayaran)
-            let payQuery = db.collection('payments').limit(20); 
-            promises.push(payQuery.get().then(snap => {
-                snap.docs.forEach(doc => {
-                    const data = doc.data();
-                    if (!isAdminOrStaff && auth?.currentUser?.displayName && data.studentName !== auth.currentUser.displayName) return;
-
-                    let status: HistoryItem['status'] = 'success';
-                    if (data.status === 'Belum Lunas' || data.status === 'Pending') status = 'warning';
-                    if (data.status === 'Gagal') status = 'error';
-
-                    allItems.push({
-                        id: doc.id,
-                        type: 'payment',
-                        date: data.date || new Date().toISOString(), 
-                        title: `${data.type} (${data.month || '-'})`,
-                        subtitle: data.studentName,
-                        status: status,
-                        amount: data.amount ? formatRupiah(data.amount) : 'Rp 0'
-                    });
-                });
-            }));
-
-            await Promise.all(promises);
-
-            // Sort Gabungan berdasarkan tanggal (Terbaru di atas)
-            allItems.sort((a, b) => {
-                const dateA = new Date(a.date).getTime() || 0;
-                const dateB = new Date(b.date).getTime() || 0;
-                return dateB - dateA;
-            });
-
-            setItems(allItems);
-
-        } catch (error) {
-            console.error("Error fetching history:", error);
-        } finally {
-            setLoading(false);
+            const ids = JSON.parse(saved) as string[];
+            const mapped = ids.map(id => ALL_AVAILABLE_MENUS.find(m => m.id === id)).filter(Boolean) as ShortcutMenu[];
+            setPinnedMenus(mapped);
+        } catch (e) {
+            console.error("Gagal memuat menu favorit");
         }
-    };
+    }
+  }, []);
 
-    fetchData();
-  }, [userRole]);
-
-  const filteredItems = useMemo(() => {
-      if (activeTab === 'all') return items;
-      // Filter attendance includes haid records for attendance tab
-      if (activeTab === 'attendance') return items.filter(i => i.type === 'attendance' || i.type === 'haid');
-      return items.filter(i => i.type === activeTab);
-  }, [items, activeTab]);
-
-  const getIcon = (type: string, status: string) => {
-      if (status === 'haid' || type === 'haid') return <HeartIcon className="w-5 h-5 text-rose-600 fill-current" />;
-      if (type === 'payment') return <BanknotesIcon className="w-5 h-5 text-emerald-600" />;
-      if (type === 'letter') return <EnvelopeIcon className="w-5 h-5 text-blue-600" />;
-      // Attendance
-      if (status === 'success') return <CheckCircleIcon className="w-5 h-5 text-teal-600" />;
-      if (status === 'warning') return <ClockIcon className="w-5 h-5 text-orange-600" />;
-      return <XCircleIcon className="w-5 h-5 text-red-600" />;
+  const saveToStorage = (menus: ShortcutMenu[]) => {
+      const ids = menus.map(m => m.id);
+      localStorage.setItem('imam_pinned_menus', JSON.stringify(ids));
   };
 
-  const getBgColor = (type: string, status: string) => {
-      if (status === 'haid' || type === 'haid') return 'bg-rose-50 dark:bg-rose-900/20';
-      if (type === 'payment') return 'bg-emerald-50 dark:bg-emerald-900/20';
-      if (type === 'letter') return 'bg-blue-50 dark:bg-blue-900/20';
-      if (status === 'success') return 'bg-teal-50 dark:bg-teal-900/20';
-      if (status === 'warning') return 'bg-orange-50 dark:bg-orange-900/20';
-      return 'bg-red-50 dark:bg-red-900/20';
+  const handleTogglePin = (menu: ShortcutMenu) => {
+      const isPinned = pinnedMenus.find(m => m.id === menu.id);
+      let nextMenus = [];
+      if (isPinned) {
+          nextMenus = pinnedMenus.filter(m => m.id !== menu.id);
+          toast.info(`${menu.label} dihapus dari Akademik.`);
+      } else {
+          nextMenus = [...pinnedMenus, menu];
+          toast.success(`${menu.label} disematkan ke Akademik.`);
+      }
+      setPinnedMenus(nextMenus);
+      saveToStorage(nextMenus);
   };
+
+  const filteredChoices = useMemo(() => {
+      return ALL_AVAILABLE_MENUS.filter(m => 
+          m.label.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+  }, [searchQuery]);
 
   return (
-    <Layout
-      title="Riwayat Transaksi"
-      subtitle="Kehadiran, Surat & Pembayaran"
-      icon={ClockIcon}
-      onBack={onBack}
+    <Layout 
+        title="Akademik" 
+        subtitle="Daftar menu akademik" 
+        icon={ClockIcon} 
+        onBack={onBack}
+        actions={
+            <button 
+                onClick={() => setIsSelectorOpen(true)}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-bold shadow-lg active:scale-90 transition-all flex items-center gap-2 border border-white/10"
+            >
+                <PlusIcon className="w-4 h-4" /> Kelola
+            </button>
+        }
     >
-      <div className="p-4 lg:p-6 pb-24">
+      <div className="p-5 lg:p-10 pb-40 space-y-8 animate-in fade-in duration-500">
         
-        {/* Tab Filters */}
-        <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
-            {[
-                { id: 'all', label: 'Semua' },
-                { id: 'attendance', label: 'Kehadiran' },
-                { id: 'payment', label: 'Pembayaran' },
-                { id: 'letter', label: 'Surat & Izin' },
-            ].map(tab => (
-                <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
-                        activeTab === tab.id 
-                        ? 'bg-slate-800 text-white border-slate-800 dark:bg-white dark:text-slate-900' 
-                        : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
-                    }`}
-                >
-                    {tab.label}
-                </button>
-            ))}
+        {/* --- HEADER BANNER --- */}
+        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-1000"></div>
+            <div className="relative z-10">
+                <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/10 mb-5">
+                    <ClockIcon className="w-6 h-6 text-indigo-400" />
+                </div>
+                <h2 className="text-xl font-black tracking-tight">Navigasi Akademik</h2>
+            </div>
         </div>
 
-        {/* Timeline List */}
-        {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                <Loader2 className="w-8 h-8 animate-spin mb-3" />
-                <p className="text-sm">Memuat data riwayat...</p>
-            </div>
-        ) : filteredItems.length > 0 ? (
-            <div className="space-y-4">
-                {filteredItems.map((item, index) => {
-                    let dateStr = '-';
-                    let timeStr = '';
-                    try {
-                        const dateObj = new Date(item.date);
-                        if (!isNaN(dateObj.getTime())) {
-                            dateStr = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-                            // Only show time if strictly available in ISO string or appended
-                            if (item.date.includes('T') || item.date.includes(':')) {
-                                timeStr = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-                            }
-                        }
-                    } catch (e) {}
-                    
-                    return (
-                        <div key={item.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-                            {/* Icon Box */}
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${getBgColor(item.type, item.status)}`}>
-                                {getIcon(item.type, item.status)}
-                            </div>
+        {/* --- DAFTAR MENU TERSEMAT (LIST VIEW) --- */}
+        {pinnedMenus.length > 0 ? (
+            <div className="space-y-3 animate-in slide-in-from-bottom-4 duration-500">
+                {pinnedMenus.map(menu => (
+                    <div 
+                        key={menu.id}
+                        onClick={() => onNavigate(menu.view)}
+                        className="group relative w-full flex items-center gap-4 p-4 bg-white dark:bg-[#151E32] rounded-[1.8rem] border border-slate-100 dark:border-slate-800 shadow-sm active:scale-[0.98] transition-all cursor-pointer overflow-hidden"
+                    >
+                        {/* Background Decoration */}
+                        <div className={`absolute top-0 right-0 w-32 h-32 opacity-0 group-hover:opacity-5 transition-opacity pointer-events-none -translate-y-1/2 translate-x-1/2 ${menu.bg} rounded-full blur-2xl`}></div>
 
-                            {/* Content */}
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-start">
-                                    <h4 className="font-bold text-slate-800 dark:text-white text-sm line-clamp-1 uppercase tracking-tight">
-                                        {item.title}
-                                    </h4>
-                                    <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap ml-2">
-                                        {dateStr}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-end mt-0.5">
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 font-medium">
-                                        {item.subtitle}
-                                    </p>
-                                    {timeStr && (item.type === 'attendance' || item.type === 'haid') && (
-                                        <span className="text-[10px] font-mono text-slate-400">{timeStr}</span>
-                                    )}
-                                </div>
-                                
-                                {item.amount && (
-                                    <div className="mt-2 inline-flex items-center gap-1 bg-emerald-50 dark:bg-emerald-900/10 px-2 py-0.5 rounded text-[10px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/20">
-                                        {item.amount}
-                                    </div>
-                                )}
-                            </div>
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner shrink-0 ${menu.bg} ${menu.color} group-hover:scale-110 transition-transform`}>
+                            <menu.icon className="w-6 h-6" />
                         </div>
-                    );
-                })}
+                        
+                        <div className="flex-1 min-w-0">
+                            <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200 tracking-tight leading-none block">{menu.label}</span>
+                            <p className="text-[10px] font-medium text-slate-400 mt-1.5 truncate opacity-80 group-hover:opacity-100 transition-opacity">{menu.description}</p>
+                        </div>
+                        
+                        <div className="flex items-center gap-1 shrink-0 pl-2">
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); handleTogglePin(menu); }}
+                                className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-all"
+                                title="Hapus dari Akademik"
+                            >
+                                <TrashIcon className="w-4 h-4" />
+                            </button>
+                            <ArrowRightIcon className="w-4 h-4 text-slate-200 group-hover:text-indigo-500 transition-colors" />
+                        </div>
+                    </div>
+                ))}
             </div>
         ) : (
-            <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
-                <div className="w-12 h-12 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
-                    <ClockIcon className="w-6 h-6" />
+            /* --- EMPTY STATE --- */
+            <div className="py-24 text-center bg-white dark:bg-[#151E32] rounded-[3rem] border border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center gap-6 shadow-inner">
+                <div className="w-20 h-20 bg-slate-50 dark:bg-slate-900 rounded-[2.5rem] flex items-center justify-center text-slate-300">
+                    <Squares2x2Icon className="w-10 h-10" />
                 </div>
-                <p className="text-slate-500 dark:text-slate-400 text-sm font-bold uppercase tracking-widest">Belum ada riwayat tercatat.</p>
+                <div>
+                    <h4 className="text-sm font-bold text-slate-800 dark:text-white">Daftar masih kosong</h4>
+                    <p className="text-[11px] font-medium text-slate-400 mt-2 max-w-[200px] mx-auto leading-relaxed">
+                        Klik tombol "Kelola" di bagian atas untuk memilih fitur yang ingin ditampilkan.
+                    </p>
+                </div>
+            </div>
+        )}
+
+        {/* --- SELECTOR MODAL --- */}
+        {isSelectorOpen && (
+            <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                <div className="bg-white dark:bg-[#0B1121] w-full max-w-lg rounded-t-[3rem] sm:rounded-[3rem] shadow-2xl border border-white/10 flex flex-col max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom-10 duration-500">
+                    
+                    <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-[#0B1121] z-10 shrink-0">
+                        <div>
+                            <h3 className="text-base font-bold text-slate-800 dark:text-white tracking-tight leading-none">Konfigurasi Akademik</h3>
+                            <p className="text-[10px] font-medium text-indigo-500 mt-2">Pilih menu untuk disematkan</p>
+                        </div>
+                        <button onClick={() => setIsSelectorOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400">
+                            <XCircleIcon className="w-7 h-7" />
+                        </button>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 dark:bg-slate-900 shrink-0">
+                        <div className="relative group">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-600" />
+                            <input 
+                                type="text" 
+                                placeholder="Cari nama menu..." 
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="w-full bg-white dark:bg-[#151E32] border border-slate-200 dark:border-slate-800 rounded-2xl py-3.5 pl-12 pr-4 text-xs font-medium focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all shadow-sm"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-3">
+                        {filteredChoices.map(menu => {
+                            const isPinned = pinnedMenus.some(m => m.id === menu.id);
+                            return (
+                                <button 
+                                    key={menu.id}
+                                    onClick={() => handleTogglePin(menu)}
+                                    className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                        isPinned 
+                                        ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800 shadow-sm' 
+                                        : 'bg-white dark:bg-[#151E32] border-slate-100 dark:border-slate-800 hover:border-indigo-200'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${menu.bg} ${menu.color}`}>
+                                            <menu.icon className="w-5 h-5" />
+                                        </div>
+                                        <div className="text-left">
+                                            <span className={`text-[12px] font-bold tracking-tight block ${isPinned ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-300'}`}>{menu.label}</span>
+                                            <span className="text-[9px] font-medium text-slate-400 block mt-0.5">{menu.id}</span>
+                                        </div>
+                                    </div>
+                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${
+                                        isPinned ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-200'
+                                    }`}>
+                                        {isPinned && <CheckCircleIcon className="w-4 h-4" />}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-[#0B1121] shrink-0">
+                        <button 
+                            onClick={() => setIsSelectorOpen(false)}
+                            className="w-full py-4 bg-indigo-600 text-white rounded-2xl text-[11px] font-bold shadow-xl active:scale-95 transition-all"
+                        >
+                            Selesai Mengatur
+                        </button>
+                    </div>
+                </div>
             </div>
         )}
 

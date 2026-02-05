@@ -20,16 +20,14 @@ export const logLoginEvent = async (userId: string, status: 'Success' | 'Failed'
         userId,
         timestamp: new Date().toISOString(),
         device: getDeviceName(),
-        ip: '127.0.0.1', // Placeholder, real IP requires server-side or 3rd party API
+        ip: '127.0.0.1', // Placeholder
         status
     };
 
     if (isMockMode) {
-        console.log(`[Mock] Login logged: ${status} for ${userId} on ${entry.device}`);
-        // In mock mode, we can store in localStorage to simulate persistence
         const existing = JSON.parse(localStorage.getItem('mock_login_history') || '[]');
         existing.unshift({ ...entry, id: `log-${Date.now()}` });
-        localStorage.setItem('mock_login_history', JSON.stringify(existing.slice(0, 50))); // Keep last 50
+        localStorage.setItem('mock_login_history', JSON.stringify(existing.slice(0, 50)));
         return;
     }
 
@@ -37,16 +35,11 @@ export const logLoginEvent = async (userId: string, status: 'Success' | 'Failed'
         if (!db) return;
         await db.collection(COLLECTION_NAME).add(entry);
     } catch (error: any) {
-        // Handle permission errors gracefully (Check Code AND Message)
-        if (error.code === 'permission-denied' || (error.message && error.message.includes('Missing or insufficient permissions'))) {
-            console.warn("Login logging: Permission denied by Firestore. Using local fallback.");
-            // Store locally as fallback so the user still sees history
-            const existing = JSON.parse(localStorage.getItem('local_login_history_fallback') || '[]');
-            existing.unshift({ ...entry, id: `local-${Date.now()}` });
-            localStorage.setItem('local_login_history_fallback', JSON.stringify(existing.slice(0, 50)));
-        } else {
-            console.error("Failed to log login event:", error);
-        }
+        console.warn("Log login gagal disimpan ke cloud:", error.message);
+        // Fallback ke local storage jika offline atau error
+        const existing = JSON.parse(localStorage.getItem('local_login_history_fallback') || '[]');
+        existing.unshift({ ...entry, id: `local-${Date.now()}` });
+        localStorage.setItem('local_login_history_fallback', JSON.stringify(existing.slice(0, 50)));
     }
 };
 
@@ -55,18 +48,15 @@ export const getLoginHistory = async (userId: string): Promise<LoginHistoryEntry
         const stored = localStorage.getItem('mock_login_history');
         if (stored) {
             const parsed = JSON.parse(stored);
-            return parsed.filter((log: LoginHistoryEntry) => log.userId === userId || userId === 'mock-user-123'); // Filter for mock user
+            return parsed.filter((log: LoginHistoryEntry) => log.userId === userId || userId === 'mock-user-123');
         }
-        // Default Mock Data if empty
-        return [
-            { id: '1', userId, timestamp: new Date().toISOString(), device: 'Windows Desktop', status: 'Success', ip: '192.168.1.1' },
-            { id: '2', userId, timestamp: new Date(Date.now() - 86400000).toISOString(), device: 'Android Device', status: 'Success', ip: '192.168.1.5' },
-            { id: '3', userId, timestamp: new Date(Date.now() - 172800000).toISOString(), device: 'Windows Desktop', status: 'Success', ip: '192.168.1.1' }
-        ];
+        return [];
     }
 
     try {
         if (!db) throw new Error("Database not initialized");
+        
+        // Query ini memerlukan indeks komposit: userId (ASC) + timestamp (DESC)
         const snapshot = await db.collection(COLLECTION_NAME)
             .where('userId', '==', userId)
             .orderBy('timestamp', 'desc')
@@ -75,15 +65,16 @@ export const getLoginHistory = async (userId: string): Promise<LoginHistoryEntry
         
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LoginHistoryEntry));
     } catch (error: any) {
-        console.error("Error fetching login history:", error);
+        // Pesan instruksi indeks dihapus untuk kenyamanan pengguna
+        console.error("Error fetching login history:", error.message);
         
-        // Return local fallback on permission error
-        if (error.code === 'permission-denied' || (error.message && error.message.includes('Missing or insufficient permissions'))) {
-            const stored = localStorage.getItem('local_login_history_fallback');
-            if (stored) {
-                return JSON.parse(stored);
-            }
+        // Fallback: Ambil dari local storage jika cloud error
+        const stored = localStorage.getItem('local_login_history_fallback');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            return parsed.filter((log: any) => log.userId === userId);
         }
+        
         return [];
     }
 };

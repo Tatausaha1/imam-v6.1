@@ -4,10 +4,9 @@
  * IMAM System - Integrated Madrasah Academic Manager
  */
 
-import React from 'react';
+// Fix: Removed invalid import statement as React is not used in this types-only file
 
 export enum ViewState {
-  ONBOARDING = 'ONBOARDING',
   LOGIN = 'LOGIN',
   DASHBOARD = 'DASHBOARD',
   PRESENSI = 'PRESENSI',
@@ -26,6 +25,8 @@ export enum ViewState {
   GRADES = 'GRADES',
   REPORT_CARDS = 'REPORT_CARDS',
   STUDENTS = 'STUDENTS',
+  ALUMNI = 'ALUMNI',
+  MUTATION = 'MUTATION',
   TEACHERS = 'TEACHERS',
   ID_CARD = 'ID_CARD',
   LETTERS = 'LETTERS',
@@ -41,8 +42,8 @@ export enum ViewState {
   SETTINGS = 'SETTINGS',
   PUSAKA = 'PUSAKA',
   GUIDE = 'GUIDE',
-  // Added missing POINTS ViewState
   POINTS = 'POINTS',
+  KEMENAG_HUB = 'KEMENAG_HUB',
 }
 
 export enum UserRole {
@@ -55,6 +56,21 @@ export enum UserRole {
   KETUA_KELAS = 'Ketua Kelas',
   SISWA = 'siswa',
   ORANG_TUA = 'orangtua',
+}
+
+export interface FAQItemData {
+  question: string;
+  answer: string;
+  iconName: string;
+}
+
+export interface AboutContent {
+  engineVersion: string;
+  brandingText: string;
+  devName: string;
+  devNip: string;
+  devQuote: string;
+  faqs: FAQItemData[];
 }
 
 export interface MadrasahData {
@@ -93,6 +109,7 @@ export interface Student {
   nisn: string;
   nik?: string;
   email?: string;
+  role?: string;
   tempatLahir?: string;
   tanggalLahir?: string;
   tingkatRombel: string;
@@ -109,11 +126,12 @@ export interface Student {
   namaWali?: string;
   accountStatus?: string;
   linkedUserId?: string;
-  // Added missing discipline points field
   disciplinePoints?: number;
+  createdAt?: string;
+  lastModified?: string;
 }
 
-export type AttendanceStatus = 'Hadir' | 'Terlambat' | 'Sakit' | 'Izin' | 'Alpha' | 'Haid';
+export type AttendanceStatus = 'Hadir' | 'Sakit' | 'Izin' | 'Alpha' | 'Haid';
 
 export interface AttendanceRecord {
     id: string;
@@ -123,15 +141,12 @@ export interface AttendanceRecord {
     class: string;
     date: string;
     status: AttendanceStatus;
-    // 3 Sesi Terintegrasi
-    masukDuha: string | null;
+    checkIn: string | null;
+    duha: string | null;
     zuhur: string | null;
-    asharPulang: string | null;
+    ashar: string | null;
+    checkOut: string | null;
 }
-
-/**
- * Added missing exports used across components
- */
 
 export interface ChatMessage {
   id: string;
@@ -220,7 +235,6 @@ export interface LoginHistoryEntry {
   status: 'Success' | 'Failed';
 }
 
-// Added missing ViolationMaster export
 export interface ViolationMaster {
   id: string;
   category: string;
@@ -228,7 +242,6 @@ export interface ViolationMaster {
   points: number;
 }
 
-// Added missing DisciplineLog export
 export interface DisciplineLog {
   id: string;
   studentId: string;

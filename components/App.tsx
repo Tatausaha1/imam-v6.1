@@ -4,49 +4,59 @@
  * IMAM System - Integrated Madrasah Academic Manager
  */
 
-import React, { useState, useEffect } from 'react';
-import Login from './Login';
-import Onboarding from './Onboarding';
-import Dashboard from './Dashboard';
-import Presensi from './Presensi';
-import ContentGeneration from './ContentGeneration';
-import ClassList from './ClassList';
-import ClassPromotion from './ClassPromotion';
-import Schedule from './Schedule';
-import BottomNav from './BottomNav';
-import GenericView from './GenericView';
-import Sidebar from './Sidebar';
-import Profile from './Profile';
-import AcademicYear from './AcademicYear';
-import Reports from './Reports';
-import ProtectedRoute from './ProtectedRoute';
-import Advisor from './Advisor';
-import Settings from './Settings';
-import PointsView from './PointsView';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { ViewState, UserRole } from '../types';
 import { toast } from 'sonner';
 import { Loader2, AppLogo } from './Icons';
 import { auth, db, isMockMode } from '../services/firebase';
 
-// Feature Views
-import AllFeatures from './AllFeatures';
-import AttendanceHistory from './AttendanceHistory';
-import QRScanner from './QRScanner';
-import TeachingJournal from './TeachingJournal';
-import Assignments from './Assignments';
-import Grades from './Grades';
-import StudentData from './StudentData';
-import TeacherData from './TeacherData';
-import IDCard from './IDCard';
-import Letters from './Letters';
-import CreateAccount from './CreateAccount';
-import DeveloperConsole from './DeveloperConsole';
-import LoginHistory from './LoginHistory';
-import About from './About';
-import History from './History';
-import Premium from './Premium';
-import News from './News';
-import MadrasahInfo from './MadrasahInfo';
+// Komponen Inti
+import Login from './Login';
+import Dashboard from './Dashboard';
+import BottomNav from './BottomNav';
+import Sidebar from './Sidebar';
+import ProtectedRoute from './ProtectedRoute';
+
+// Lazy Loaded Components
+const Presensi = lazy(() => import('./Presensi'));
+const ClassList = lazy(() => import('./ClassList'));
+const Schedule = lazy(() => import('./Schedule'));
+const Profile = lazy(() => import('./Profile'));
+const Reports = lazy(() => import('./Reports'));
+const Advisor = lazy(() => import('./Advisor'));
+const Settings = lazy(() => import('./Settings'));
+const AllFeatures = lazy(() => import('./AllFeatures'));
+const AttendanceHistory = lazy(() => import('./AttendanceHistory'));
+const QRScanner = lazy(() => import('./QRScanner'));
+const TeachingJournal = lazy(() => import('./TeachingJournal'));
+const Assignments = lazy(() => import('./Assignments'));
+const Grades = lazy(() => import('./Grades'));
+const StudentData = lazy(() => import('./StudentData'));
+const AlumniData = lazy(() => import('./AlumniData'));
+const MutationData = lazy(() => import('./MutationData'));
+const TeacherData = lazy(() => import('./TeacherData'));
+const IDCard = lazy(() => import('./IDCard'));
+const Letters = lazy(() => import('./Letters'));
+const CreateAccount = lazy(() => import('./CreateAccount'));
+const DeveloperConsole = lazy(() => import('./DeveloperConsole'));
+const LoginHistory = lazy(() => import('./LoginHistory'));
+const About = lazy(() => import('./About'));
+const History = lazy(() => import('./History'));
+const MadrasahInfo = lazy(() => import('./MadrasahInfo'));
+const KemenagHub = lazy(() => import('./KemenagHub'));
+const PointsView = lazy(() => import('./PointsView'));
+const AcademicYear = lazy(() => import('./AcademicYear'));
+const ClassPromotion = lazy(() => import('./ClassPromotion'));
+const News = lazy(() => import('./News'));
+const Premium = lazy(() => import('./Premium'));
+const GenericView = lazy(() => import('./GenericView'));
+
+const PageLoader = () => (
+    <div className="h-full w-full flex flex-col items-center justify-center bg-white/50 dark:bg-[#020617]/50 backdrop-blur-sm animate-in fade-in duration-300">
+        <Loader2 className="w-10 h-10 text-indigo-500 animate-spin opacity-40 mb-4" />
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Memuat Modul...</p>
+    </div>
+);
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.LOGIN);
@@ -57,13 +67,6 @@ const App: React.FC = () => {
   const [viewKey, setViewKey] = useState(0); 
 
   useEffect(() => {
-      // Check for onboarding completion
-      const onboardingDone = localStorage.getItem('imam_onboarding_done');
-      if (!onboardingDone) {
-          setCurrentView(ViewState.ONBOARDING);
-      }
-
-      // Theme logic with system preference fallback
       const savedTheme = localStorage.getItem('theme');
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       const shouldBeDark = savedTheme === 'dark' || (!savedTheme && prefersDark);
@@ -72,7 +75,6 @@ const App: React.FC = () => {
       if (shouldBeDark) document.documentElement.classList.add('dark');
       else document.documentElement.classList.remove('dark');
       
-      // Connection monitoring
       const handleOnline = () => { setIsOnline(true); toast.success("Koneksi online."); };
       const handleOffline = () => { setIsOnline(false); toast.warning("Mode Offline Aktif."); };
 
@@ -139,24 +141,12 @@ const App: React.FC = () => {
 
   const backToDashboard = () => handleNavigate(ViewState.DASHBOARD);
 
-  if (authLoading) {
-      return (
-          <div className="fixed inset-0 h-screen w-full flex flex-col items-center justify-center bg-[#020617] z-[100]">
-              <div className="relative z-10 flex flex-col items-center animate-in fade-in duration-500">
-                  <div className="w-16 h-16 mb-6 opacity-40"><AppLogo className="w-full h-full" /></div>
-                  <Loader2 className="w-6 h-6 text-indigo-500 animate-spin opacity-30" />
-              </div>
-          </div>
-      );
-  }
-
-  const adminDevOnly = [UserRole.ADMIN, UserRole.DEVELOPER];
   const staffAbove = [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.GURU, UserRole.STAF, UserRole.WALI_KELAS, UserRole.KEPALA_MADRASAH];
-  const devOnly = [UserRole.DEVELOPER];
+  const adminDevOnly = [UserRole.ADMIN, UserRole.DEVELOPER];
+  const allAuthenticated = [...staffAbove, UserRole.SISWA, UserRole.ORANG_TUA, UserRole.KETUA_KELAS];
 
-  const renderView = () => {
+  const renderViewContent = () => {
     switch (currentView) {
-      case ViewState.ONBOARDING: return <Onboarding onStart={() => handleNavigate(ViewState.LOGIN)} />;
       case ViewState.LOGIN: return <Login onLogin={handleLoginSuccess} />;
       case ViewState.DASHBOARD: return <Dashboard onNavigate={handleNavigate} isDarkMode={isDarkTheme} onToggleTheme={toggleTheme} userRole={userRole} onLogout={handleLogout} />;
       case ViewState.PROFILE: return <Profile onBack={backToDashboard} onLogout={handleLogout} />;
@@ -166,68 +156,94 @@ const App: React.FC = () => {
       case ViewState.ABOUT: return <About onBack={backToDashboard} />;
       case ViewState.LOGIN_HISTORY: return <LoginHistory onBack={backToDashboard} />;
       case ViewState.ID_CARD: return <IDCard onBack={backToDashboard} />;
-      case ViewState.HISTORY: return <History onBack={backToDashboard} userRole={userRole} />;
+      case ViewState.HISTORY: return <History onBack={backToDashboard} onNavigate={handleNavigate} userRole={userRole} />;
       case ViewState.PREMIUM: return <Premium onBack={backToDashboard} />;
       case ViewState.ADVISOR: return <Advisor onBack={backToDashboard} />;
       case ViewState.MADRASAH_INFO: return <MadrasahInfo onBack={backToDashboard} />;
-      case ViewState.CLASSES: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><ClassList onBack={backToDashboard} userRole={userRole} /></ProtectedRoute>;
-      case ViewState.SCANNER: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><QRScanner onBack={backToDashboard} /></ProtectedRoute>;
-      case ViewState.ATTENDANCE_HISTORY: return <AttendanceHistory onBack={backToDashboard} onNavigate={handleNavigate} userRole={userRole} />;
+      case ViewState.KEMENAG_HUB: return <KemenagHub onBack={backToDashboard} />;
+      case ViewState.CLASSES: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><ClassList onBack={backToDashboard} onNavigate={handleNavigate} userRole={userRole} /></ProtectedRoute>;
       case ViewState.PRESENSI: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><Presensi onBack={backToDashboard} onNavigate={handleNavigate} /></ProtectedRoute>;
-      case ViewState.CONTENT_GENERATION: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><ContentGeneration onBack={backToDashboard} /></ProtectedRoute>;
-      case ViewState.REPORTS: return <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={backToDashboard}><Reports onBack={backToDashboard} /></ProtectedRoute>;
+      case ViewState.SCANNER: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><QRScanner onBack={backToDashboard} /></ProtectedRoute>;
+      case ViewState.REPORTS: return <ProtectedRoute allowedRoles={allAuthenticated} userRole={userRole} onBack={backToDashboard}><Reports onBack={backToDashboard} onNavigate={handleNavigate} userRole={userRole} /></ProtectedRoute>;
       case ViewState.JOURNAL: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><TeachingJournal onBack={backToDashboard} userRole={userRole} /></ProtectedRoute>;
       case ViewState.ASSIGNMENTS: return <Assignments onBack={backToDashboard} userRole={userRole} />;
       case ViewState.GRADES:
       case ViewState.REPORT_CARDS: return <Grades onBack={backToDashboard} userRole={userRole} />;
       case ViewState.STUDENTS: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><StudentData onBack={backToDashboard} userRole={userRole} /></ProtectedRoute>;
+      case ViewState.ALUMNI: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><AlumniData onBack={backToDashboard} userRole={userRole} /></ProtectedRoute>;
+      case ViewState.MUTATION: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><MutationData onBack={backToDashboard} userRole={userRole} /></ProtectedRoute>;
       case ViewState.TEACHERS: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={backToDashboard}><TeacherData onBack={backToDashboard} userRole={userRole} /></ProtectedRoute>;
       case ViewState.LETTERS: return <Letters onBack={backToDashboard} userRole={userRole} />;
       case ViewState.POINTS: return <PointsView onBack={backToDashboard} />;
-      case ViewState.PUSAKA: return <GenericView title="Pusaka Kemenag" onBack={backToDashboard} description="Integrasi resmi dengan Pusaka Super Apps Kementerian Agama RI untuk layanan kepegawaian dan administrasi terpusat." />;
+      case ViewState.ACADEMIC_YEAR: return <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={backToDashboard}><AcademicYear onBack={backToDashboard} /></ProtectedRoute>;
+      case ViewState.PROMOTION: return <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={backToDashboard}><ClassPromotion onBack={backToDashboard} /></ProtectedRoute>;
+      case ViewState.PUSAKA: return <GenericView title="Pusaka Kemenag" onBack={backToDashboard} description="Integrasi resmi dengan Pusaka Super Apps RI." />;
       case ViewState.CREATE_ACCOUNT: 
         return (
             <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={backToDashboard}>
                 <CreateAccount onBack={backToDashboard} userRole={userRole} />
             </ProtectedRoute>
         );
-      case ViewState.DEVELOPER: return <ProtectedRoute allowedRoles={devOnly} userRole={userRole} onBack={backToDashboard}><DeveloperConsole onBack={backToDashboard} /></ProtectedRoute>;
+      case ViewState.DEVELOPER: return <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={backToDashboard}><DeveloperConsole onBack={backToDashboard} /></ProtectedRoute>;
       case ViewState.SETTINGS: return <Settings onBack={backToDashboard} onNavigate={handleNavigate} onLogout={handleLogout} isDarkMode={isDarkTheme} onToggleTheme={toggleTheme} userRole={userRole} />;
       default: return <GenericView title="Fitur" onBack={backToDashboard} />;
     }
   };
 
-  const isFullPageHeader = currentView === ViewState.LOGIN || currentView === ViewState.ONBOARDING;
+  if (authLoading) {
+      return (
+          <div className="fixed inset-0 h-screen w-full flex flex-col items-center justify-center bg-[#020617] z-[100]">
+              <div className="relative z-10 flex flex-col items-center animate-in fade-in duration-500">
+                  <div className="w-24 h-24 mb-6"><AppLogo className="w-full h-full" /></div>
+                  <Loader2 className="w-6 h-6 text-indigo-500 animate-spin opacity-30" />
+              </div>
+          </div>
+      );
+  }
+
+  const isLoginPage = currentView === ViewState.LOGIN;
 
   return (
-    <div className="h-screen w-full flex flex-col font-sans overflow-hidden bg-white dark:bg-[#020617] relative">
+    <div className={`h-full w-full relative flex overflow-hidden bg-white dark:bg-[#020617] ${isDarkTheme ? 'dark' : ''}`}>
+        {isLoginPage ? (
+            <Suspense fallback={<PageLoader />}>
+                {renderViewContent()}
+            </Suspense>
+        ) : (
+            <div className="h-full w-full relative flex overflow-hidden">
+                {/* Desktop Sidebar (Visible in fullscreen mode on large screens) */}
+                <div className="hidden lg:block w-72 lg:w-80 shrink-0 h-full border-r border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-[#0B1121]/50 backdrop-blur-xl z-40">
+                    <Sidebar currentView={currentView} onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />
+                </div>
+                
+                <div className="flex-1 flex flex-col h-full w-full relative overflow-hidden">
+                    {/* Background Ambience (Global) */}
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+                        <div className={`absolute top-[-10%] left-[-10%] w-[70%] h-[70%] rounded-full blur-[150px] opacity-30 ${isDarkTheme ? 'bg-indigo-500/20' : 'bg-indigo-400/20'}`}></div>
+                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+                    </div>
+
+                    <div className="flex-1 overflow-hidden relative z-10">
+                        <Suspense fallback={<PageLoader />}>
+                            <div key={viewKey} className="h-full w-full relative">
+                                {renderViewContent()}
+                            </div>
+                        </Suspense>
+                    </div>
+                    
+                    {/* Bottom Nav on Mobile Devices */}
+                    <div className="shrink-0 z-50">
+                        <BottomNav currentView={currentView} onNavigate={handleNavigate} userRole={userRole} />
+                    </div>
+                </div>
+            </div>
+        )}
+        
         {!isOnline && (
-            <div className="fixed top-0 left-0 right-0 z-[1000] bg-orange-600 text-white text-[9px] font-black uppercase tracking-[0.2em] text-center py-1">
+            <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[1000] bg-orange-600/90 backdrop-blur-md text-white text-[8px] font-black uppercase tracking-[0.2em] px-4 py-1 rounded-full shadow-lg">
                 Mode Offline Aktif
             </div>
         )}
-        <div className="h-full w-full relative flex overflow-hidden">
-            {/* Desktop Sidebar */}
-            {!isFullPageHeader && (
-                <div className="hidden md:block w-72 lg:w-80 shrink-0 h-full border-r border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-[#0B1121]/50 backdrop-blur-xl z-40">
-                    <Sidebar currentView={currentView} onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />
-                </div>
-            )}
-            
-            {/* Main Application Area */}
-            <div className="flex-1 flex flex-col h-full w-full relative overflow-hidden">
-                <div key={viewKey} className={`flex-1 overflow-hidden relative animate-in fade-in slide-in-from-bottom-2 duration-300 ${!isOnline ? 'mt-4' : ''}`}>
-                    {renderView()}
-                </div>
-                
-                {/* Mobile Navigation */}
-                {!isFullPageHeader && (
-                    <div className="md:hidden shrink-0 z-50">
-                      <BottomNav currentView={currentView} onNavigate={handleNavigate} userRole={userRole} />
-                    </div>
-                )}
-            </div>
-        </div>
     </div>
   );
 };

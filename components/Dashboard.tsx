@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ViewState, UserRole, Student } from '../types';
+import { ViewState, UserRole, Student, ClassData } from '../types';
 import { db, auth, isMockMode } from '../services/firebase';
 import { 
   UsersGroupIcon, BriefcaseIcon, UserIcon,
@@ -14,7 +14,8 @@ import {
   CalendarIcon, RobotIcon, BookOpenIcon, CogIcon,
   IdentificationIcon, StarIcon, BuildingLibraryIcon,
   LogOutIcon, CameraIcon, SparklesIcon,
-  ClipboardDocumentListIcon
+  ClipboardDocumentListIcon,
+  ShieldCheckIcon, HeartIcon, HeadsetIcon
 } from './Icons';
 import { format } from 'date-fns';
 
@@ -27,19 +28,10 @@ interface DashboardProps {
   onOpenSidebar?: () => void;
 }
 
-interface ClassStat {
-    name: string;
-    totalStudents: number;
-    presentMale: number;
-    presentFemale: number;
-    totalMale: number;
-    totalFemale: number;
-    pct: number;
-}
-
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout }) => {
   const [userName, setUserName] = useState<string>('Pengguna');
   const [userIdUnik, setUserIdUnik] = useState<string | null>(null);
+  const [managedClass, setManagedClass] = useState<ClassData | null>(null);
   
   const [stats, setStats] = useState({
     students: 0,
@@ -49,9 +41,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
     attendanceToday: 0
   });
   
-  const [classDetailedStats, setClassDetailedStats] = useState<ClassStat[]>([]);
   const [maleStudents, setMaleStudents] = useState<number>(0);
   const [femaleStudents, setFemaleStudents] = useState<number>(0);
+  const [classAttendancePct, setClassAttendancePct] = useState<number>(0);
   
   const [trendData, setTrendData] = useState<{day: string, val: number, fullDate: string}[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
@@ -59,15 +51,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
   
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+
   const isStudent = userRole === UserRole.SISWA;
-  const isTeacher = userRole === UserRole.GURU || userRole === UserRole.WALI_KELAS;
+  const isWaliKelas = userRole === UserRole.WALI_KELAS;
+  const isTeacher = userRole === UserRole.GURU || isWaliKelas;
   const isAdmin = userRole === UserRole.ADMIN || userRole === UserRole.DEVELOPER;
   const isKamad = userRole === UserRole.KEPALA_MADRASAH;
+  const isStaffAction = isAdmin || isTeacher || userRole === UserRole.STAF;
 
-  // Foto Kepala Madrasah High Definition (Full Frame)
   const prestigePhoto = "https://lh3.googleusercontent.com/d/1nUuvSSEI4pj7YZd_Hy4iSO62LM-_KuoE";
+  const mobileBgImage = "https://lh3.googleusercontent.com/d/1o8KomVWrJbSQi4m3JdJO1WbbeZHWyrrW";
 
-  // LOAD DATA
   useEffect(() => {
     const fetchAllData = async () => {
         setLoadingStats(true);
@@ -82,12 +80,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
                 setStats({ students: 842, teachers: 56, classes: 24, pendingLetters: 5, attendanceToday: 92 });
                 setMaleStudents(410); setFemaleStudents(432);
                 setTrendData(last7Days.map(d => ({ ...d, val: 85 + Math.floor(Math.random() * 15) })));
-                setClassDetailedStats([
-                    { name: 'XII IPA 1', totalStudents: 32, totalMale: 14, totalFemale: 18, presentMale: 13, presentFemale: 18, pct: 97 },
-                    { name: 'XI IPS 1', totalStudents: 35, totalMale: 20, totalFemale: 15, presentMale: 18, presentFemale: 12, pct: 85 },
-                    { name: 'X AGAMA', totalStudents: 28, totalMale: 10, totalFemale: 18, presentMale: 8, presentFemale: 15, pct: 82 }
-                ]);
-                setTodayAttendance({ status: 'Hadir', checkIn: '07:12' });
+                setTodayAttendance({ status: 'Hadir', checkIn: '07:12', duha: '08:05', zuhur: '12:30', ashar: null, checkOut: null });
+                if (isWaliKelas) {
+                    setManagedClass({ id: 'c1', name: 'XII IPA 1', level: '12', academicYear: '2023/2024' });
+                    setClassAttendancePct(96);
+                }
                 setLoadingStats(false);
                 setTimeout(() => setShowChart(true), 300);
             }, 800);
@@ -96,43 +93,46 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
 
         if (!db) return;
         try {
+            const todayStr = format(new Date(), 'yyyy-MM-dd');
             const [studentsSnap, teachersSnap, classesSnap, lettersSnap, attendanceTodaySnap] = await Promise.all([
                 db.collection('students').where('status', '==', 'Aktif').get(),
                 db.collection('teachers').get(),
                 db.collection('classes').get(),
                 db.collection('letters').where('status', '==', 'Pending').get(),
-                db.collection('attendance').where('date', '==', format(new Date(), 'yyyy-MM-dd')).get()
+                db.collection('attendance').where('date', '==', todayStr).get()
             ]);
 
             const sDocs = studentsSnap.docs.map(d => d.data() as Student);
-            setMaleStudents(sDocs.filter(d => d.jenisKelamin === 'Laki-laki').length);
-            setFemaleStudents(sDocs.filter(d => d.jenisKelamin === 'Perempuan').length);
-            
-            const detailedStats: ClassStat[] = classesSnap.docs.map(cDoc => {
-                const className = cDoc.data().name;
-                const studentsInClass = sDocs.filter(s => s.tingkatRombel === className);
-                const totalInClass = studentsInClass.length;
-                const presentInClass = attendanceTodaySnap.docs.filter(a => a.data().class === className && ['Hadir', 'Terlambat', 'Haid'].includes(a.data().status)).length;
-                return {
-                    name: className, totalStudents: totalInClass, totalMale: studentsInClass.filter(s => s.jenisKelamin === 'Laki-laki').length,
-                    totalFemale: studentsInClass.filter(s => s.jenisKelamin === 'Perempuan').length,
-                    presentMale: 0, presentFemale: 0,
-                    pct: totalInClass > 0 ? Math.round((presentInClass / totalInClass) * 100) : 0
-                };
-            }).sort((a,b) => b.pct - a.pct);
-
-            setClassDetailedStats(detailedStats);
             setStats({ students: studentsSnap.size, teachers: teachersSnap.size, classes: classesSnap.size, pendingLetters: lettersSnap.size, attendanceToday: attendanceTodaySnap.size });
             setTrendData(last7Days.map(d => ({ ...d, val: 90 })));
 
             if (auth.currentUser) {
-                const myAtt = attendanceTodaySnap.docs.find(d => d.data().studentId === auth.currentUser?.uid || d.data().idUnik === userIdUnik);
+                const uid = auth.currentUser.uid;
+                const myAtt = attendanceTodaySnap.docs.find(d => d.data().studentId === uid || d.data().idUnik === userIdUnik);
                 if (myAtt) setTodayAttendance(myAtt.data());
+
+                if (isWaliKelas) {
+                    const myClassDoc = classesSnap.docs.find(d => d.data().teacherId === uid);
+                    if (myClassDoc) {
+                        const classData = { id: myClassDoc.id, ...myClassDoc.data() } as ClassData;
+                        setManagedClass(classData);
+                        const classStudents = sDocs.filter(s => s.tingkatRombel === classData.name);
+                        const classAttendanceCount = attendanceTodaySnap.docs.filter(d => d.data().class === classData.name).length;
+                        setMaleStudents(classStudents.filter(s => s.jenisKelamin === 'Laki-laki').length);
+                        setFemaleStudents(classStudents.filter(s => s.jenisKelamin === 'Perempuan').length);
+                        if (classStudents.length > 0) {
+                            setClassAttendancePct(Math.round((classAttendanceCount / classStudents.length) * 100));
+                        }
+                    }
+                } else {
+                    setMaleStudents(sDocs.filter(d => d.jenisKelamin === 'Laki-laki').length);
+                    setFemaleStudents(sDocs.filter(d => d.jenisKelamin === 'Perempuan').length);
+                }
             }
         } catch (e) { console.error(e); } finally { setLoadingStats(false); setShowChart(true); }
     };
     fetchAllData();
-  }, [userIdUnik]);
+  }, [userIdUnik, userRole, isWaliKelas]);
 
   useEffect(() => {
       if (auth.currentUser) {
@@ -148,279 +148,245 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
       }
   }, []);
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!scrollRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - scrollRef.current.offsetLeft);
+    setScrollLeft(scrollRef.current.scrollLeft);
+  };
+  const handleMouseLeave = () => setIsDragging(false);
+  const handleMouseUp = () => setIsDragging(false);
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !scrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const walk = (x - startX) * 2; 
+    scrollRef.current.scrollLeft = scrollLeft - walk;
+  };
+
   const quickMenuItems = [
-    { show: true, label: 'Jadwal', icon: CalendarIcon, view: ViewState.SCHEDULE, color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-900/30' },
-    { show: true, label: 'Tugas', icon: ClipboardDocumentListIcon, view: ViewState.ASSIGNMENTS, color: 'text-violet-600', bg: 'bg-violet-50 dark:bg-violet-900/30' },
-    { show: !isStudent, label: 'Presensi', icon: QrCodeIcon, view: ViewState.PRESENSI, color: 'text-teal-600', bg: 'bg-teal-50 dark:bg-teal-900/30' },
-    { show: !isStudent && (isTeacher || isAdmin || isKamad), label: 'AI', icon: RobotIcon, view: ViewState.CONTENT_GENERATION, color: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-900/30' },
-    { show: !isStudent, label: 'Kelas', icon: BookOpenIcon, view: ViewState.CLASSES, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/30' },
-    { show: true, label: 'Nilai', icon: AcademicCapIcon, view: ViewState.REPORT_CARDS, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/30' },
-    { show: true, label: 'Surat', icon: EnvelopeIcon, view: ViewState.LETTERS, color: 'text-sky-600', bg: 'bg-sky-50 dark:bg-sky-900/30' },
-    { show: isAdmin || isKamad, label: 'Laporan', icon: ChartBarIcon, view: ViewState.REPORTS, color: 'text-slate-600', bg: 'bg-slate-200 dark:bg-slate-800' }
+    { show: true, label: 'Jadwal', icon: CalendarIcon, view: ViewState.SCHEDULE, color: 'text-orange-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Tugas', icon: ClipboardDocumentListIcon, view: ViewState.ASSIGNMENTS, color: 'text-violet-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: isWaliKelas || isAdmin || isKamad, label: 'Kelas', icon: BookOpenIcon, view: ViewState.CLASSES, color: 'text-blue-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Nilai', icon: AcademicCapIcon, view: ViewState.REPORT_CARDS, color: 'text-emerald-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Surat', icon: EnvelopeIcon, view: ViewState.LETTERS, color: 'text-sky-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Database', icon: ChartBarIcon, view: ViewState.REPORTS, color: 'text-slate-600', bg: 'bg-white dark:bg-slate-800' }
   ];
 
+  const MiniSessionTracker = ({ data }: { data: any }) => {
+    const sessions = [
+        { key: 'checkIn', label: 'M' },
+        { key: 'duha', label: 'D' },
+        { key: 'zuhur', label: 'Z' },
+        { key: 'ashar', label: 'A' },
+        { key: 'checkOut', label: 'P' }
+    ];
+    return (
+        <div className="flex gap-1 mt-3">
+            {sessions.map(s => {
+                const val = data ? data[s.key] : null;
+                const isHaid = val && String(val).includes('Haid');
+                const isFilled = !!val;
+                return (
+                    <div key={s.key} className={`w-6 h-6 rounded-lg flex items-center justify-center text-[8px] font-black border transition-all ${
+                        isFilled 
+                        ? (isHaid ? 'bg-rose-500 border-rose-400 text-white shadow-lg' : 'bg-emerald-500 border-emerald-400 text-white shadow-lg') 
+                        : 'bg-white/10 border-white/5 text-white/30'
+                    }`}>
+                        {s.label}
+                    </div>
+                );
+            })}
+        </div>
+    );
+  };
+
   return (
-    <div className="flex flex-col h-full bg-[#f8fafc] dark:bg-[#020617] overflow-hidden transition-colors duration-500">
+    <div className="flex flex-col h-full bg-[#f8fafc] dark:bg-[#020617] overflow-hidden transition-colors duration-500 relative">
       
+      {/* --- BACKGROUND IMAGE UNTUK MOBILE (GLOBAL DASHBOARD) --- */}
+      <div className="absolute inset-0 lg:hidden z-0 pointer-events-none">
+          <img 
+            src={mobileBgImage} 
+            className="w-full h-full object-cover opacity-100" 
+            alt="" 
+          />
+          <div className="absolute inset-0 bg-white/30 dark:bg-black/30 backdrop-blur-[1px]"></div>
+      </div>
+
+      {/* --- FLOATING ACTION BUTTONS (FIXED POSITION) --- */}
+      <div className="absolute bottom-24 right-6 z-[60] flex flex-col gap-3 items-center animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-500">
+          {isStaffAction && (
+            <button 
+              onClick={() => onNavigate(ViewState.SCANNER)}
+              className="w-14 h-14 rounded-full bg-indigo-600 text-white shadow-2xl flex items-center justify-center border-2 border-white/20 active:scale-90 transition-all group relative animate-bounce-slow"
+            >
+                <CameraIcon className="w-6 h-6" />
+            </button>
+          )}
+          <button 
+            onClick={() => onNavigate(ViewState.ADVISOR)}
+            className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-[0_15px_40px_rgba(79,70,229,0.4)] flex items-center justify-center border-2 border-white/20 active:scale-90 transition-all group relative"
+          >
+              <div className="absolute inset-0 rounded-full bg-indigo-500 animate-ping opacity-20"></div>
+              <HeadsetIcon className="w-8 h-8 relative z-10" />
+          </button>
+      </div>
+
       {/* --- HEADER --- */}
-      <div className="px-6 pt-12 pb-6 bg-white dark:bg-[#0B1121] rounded-b-[2.5rem] border-b border-slate-100 dark:border-slate-800/50 shadow-sm sticky top-0 z-40">
-        <div className="flex justify-between items-start mb-6">
+      <div className="px-4 pt-10 pb-4 bg-white/70 dark:bg-[#0B1121]/70 backdrop-blur-xl rounded-b-[2.2rem] border-b border-slate-100 dark:border-slate-800/50 shadow-sm sticky top-0 z-40 animate-in fade-in slide-in-from-top-4 duration-700">
+        <div className="flex justify-between items-start mb-4">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-1.5 mb-1 animate-in fade-in slide-in-from-left-4 duration-1000">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                    {isStudent ? 'Portal Siswa Digital' : isKamad ? 'Dashboard Pimpinan' : 'Management System'}
+                <p className="text-[8px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-[0.2em]">
+                    {isStudent ? 'Portal Siswa' : isKamad ? 'Dashboard Pimpinan' : isWaliKelas ? 'Wali Kelas' : 'Manajemen Madrasah'}
                 </p>
             </div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white leading-tight truncate">
+            <h1 className="text-xl font-black text-slate-900 dark:text-white leading-tight truncate">
                 Halo, {userName.split(' ')[0]}!
             </h1>
-            <div className="flex items-center gap-2 mt-2">
-                <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 text-[8px] font-black uppercase tracking-widest border border-indigo-100 dark:border-indigo-800 shadow-sm">
-                    {userRole === UserRole.KEPALA_MADRASAH ? 'Kepala Madrasah' : userRole}
-                </span>
-                {isStudent && userIdUnik && (
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-[8px] font-black tracking-widest border border-amber-100 dark:border-amber-800 shadow-sm">
-                        <IdentificationIcon className="w-3 h-3" /> {userIdUnik}
-                    </span>
-                )}
-            </div>
           </div>
-          <div className="flex gap-2.5 shrink-0">
-             <button onClick={() => onNavigate(ViewState.SETTINGS)} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl text-slate-500 dark:text-slate-400 hover:text-indigo-600 transition-all border border-slate-100 dark:border-slate-800">
-                <CogIcon className="w-5 h-5" />
-             </button>
-             <button onClick={() => { if(window.confirm("Keluar sistem?")) onLogout(); }} className="p-3 bg-rose-50 dark:bg-rose-900/20 rounded-2xl text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition-all active:scale-90 border border-rose-100 dark:border-rose-900/30">
-                <LogOutIcon className="w-5 h-5" />
+          <div className="flex gap-2 shrink-0">
+             <button onClick={() => { if(window.confirm("Keluar sistem?")) onLogout(); }} className="p-2.5 bg-rose-50 dark:bg-rose-900/20 rounded-xl text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30">
+                <LogOutIcon className="w-4 h-4" />
              </button>
           </div>
         </div>
 
-        {/* --- DYNAMIC STATS TRACK (MANUAL SCROLL) --- */}
-        <div className="flex overflow-x-auto gap-4 pb-2 scrollbar-hide -mx-2 px-2 snap-x">
-            
-            {/* Student Specific Attendance Widget */}
-            {isStudent && (
-                <div onClick={() => onNavigate(ViewState.ATTENDANCE_HISTORY)} className="min-w-[260px] snap-center bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-[2rem] p-5 text-white shadow-xl shadow-indigo-500/20 cursor-pointer group overflow-hidden relative">
-                    <div className="absolute top-0 right-0 p-6 opacity-10 rotate-12 group-hover:rotate-0 transition-transform duration-700"><CheckCircleIcon className="w-24 h-24" /></div>
+        <div 
+            ref={scrollRef}
+            onMouseDown={handleMouseDown}
+            onMouseLeave={handleMouseLeave}
+            onMouseUp={handleMouseUp}
+            onMouseMove={handleMouseMove}
+            className={`flex overflow-x-auto gap-3 pb-2 scrollbar-hide -mx-4 px-4 snap-x snap-mandatory scroll-smooth touch-pan-x cursor-grab active:cursor-grabbing`}
+        >
+            {isWaliKelas && managedClass && (
+                <div 
+                    onClick={() => onNavigate(ViewState.CLASSES)} 
+                    className="min-w-[240px] snap-center bg-gradient-to-br from-indigo-700 to-indigo-900 rounded-[2rem] p-4 text-white shadow-xl shadow-indigo-500/20 cursor-pointer group relative overflow-hidden"
+                >
                     <div className="relative z-10">
-                        <p className="text-[9px] font-black uppercase tracking-[0.2em] opacity-70 mb-1">Status Kehadiran Hari Ini</p>
-                        <h3 className="text-xl font-black mb-4">
-                            {todayAttendance ? (todayAttendance.status === 'Hadir' ? 'Hadir Tepat Waktu' : todayAttendance.status) : 'Belum Scan Masuk'}
-                        </h3>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <ClockIcon className="w-3.5 h-3.5 opacity-60" />
-                                <span className="text-[10px] font-bold">{todayAttendance?.checkIn || '--:--'} WIB</span>
-                            </div>
-                            <span className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-3 py-1 rounded-lg">Detail</span>
+                        <p className="text-[8px] font-black uppercase tracking-[0.2em] opacity-70 mb-0.5">Rombel Binaan</p>
+                        <h3 className="text-lg font-black mb-0.5">{managedClass.name}</h3>
+                        <div className="flex items-center justify-between mt-3">
+                            <span className="text-[9px] font-bold">Presensi: {classAttendancePct}%</span>
+                            <span className="text-[8px] font-black uppercase tracking-widest bg-white/20 px-3 py-1 rounded-xl">Kelola</span>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* General Metrics for Non-Students */}
+            {isStudent && (
+                <div 
+                    onClick={() => onNavigate(ViewState.ATTENDANCE_HISTORY)} 
+                    className="min-w-[240px] snap-center bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-[2rem] p-4 text-white shadow-xl shadow-indigo-500/20 cursor-pointer group relative overflow-hidden"
+                >
+                    <div className="relative z-10">
+                        <p className="text-[8px] font-black uppercase tracking-[0.2em] opacity-70 mb-0.5">Kehadiran Saya</p>
+                        <h3 className="text-lg font-black">{todayAttendance ? todayAttendance.status : 'Belum Scan'}</h3>
+                        <MiniSessionTracker data={todayAttendance} />
+                    </div>
+                </div>
+            )}
+
             {!isStudent && (
                 <>
-                    {/* KEPALA MADRASAH IDENTITY CARD - PRESTIGE FULL FRAME */}
-                    <div className="relative min-w-[280px] md:min-w-[360px] snap-center cursor-pointer group transition-all duration-700">
-                        <div className="relative z-10 rounded-[2.5rem] bg-[#0F172A] text-white shadow-2xl h-[200px] flex flex-col justify-end overflow-hidden border border-white/10 group-hover:scale-[1.02] group-hover:shadow-indigo-500/10">
-                            
-                            {/* Full Frame Photo with Parallax effect */}
+                    <div className="relative min-w-[260px] snap-center cursor-pointer group">
+                        <div className="relative z-10 rounded-[2rem] bg-[#0F172A] text-white shadow-2xl h-[160px] flex flex-col justify-end overflow-hidden border border-white/10">
                             <div className="absolute inset-0 z-0">
-                                <img 
-                                  src={prestigePhoto} 
-                                  className="w-full h-full object-cover object-top scale-100 group-hover:scale-110 transition-transform duration-[3000ms]" 
-                                  alt="H. Someran, S.Pd.,MM" 
-                                />
-                                {/* Scrim Overlay for Legibility */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-[#020617]/40 to-transparent"></div>
-                                <div className="absolute inset-0 bg-indigo-900/10 mix-blend-overlay"></div>
+                                <img src={prestigePhoto} className="w-full h-full object-cover object-top" alt="Pimpinan" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-[#020617]/30 to-transparent"></div>
                             </div>
-                            
-                            {/* Prestige Label (Top Right) */}
-                            <div className="absolute top-4 right-4 z-20">
-                                <div className="bg-yellow-400 text-indigo-950 p-2 rounded-2xl shadow-xl border border-white/30 animate-pulse">
-                                    <StarIcon className="w-5 h-5 fill-current" />
-                                </div>
-                            </div>
-
-                            {/* Pimpinan Detail Info (Bottom) */}
-                            <div className="relative z-10 p-6">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <SparklesIcon className="w-3.5 h-3.5 text-yellow-400" />
-                                    <span className="text-[8px] font-black uppercase tracking-[0.4em] text-yellow-400 drop-shadow-md">Kepala Madrasah</span>
-                                </div>
-                                <h4 className="text-lg font-black uppercase tracking-tight leading-none drop-shadow-lg">H. Someran, S.Pd.,MM</h4>
-                                <div className="flex items-center gap-2 mt-2">
-                                    <div className="px-2 py-0.5 rounded bg-white/10 backdrop-blur-md border border-white/10">
-                                        <p className="text-[8px] font-mono font-bold text-slate-300 uppercase tracking-tighter">NIP. 196703021996031001</p>
-                                    </div>
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse"></span>
-                                </div>
+                            <div className="relative z-10 p-4">
+                                <h4 className="text-sm font-black uppercase tracking-tight leading-none">H. Someran, S.Pd.,MM</h4>
+                                <p className="text-[7px] font-mono font-bold text-slate-300 mt-1">NIP. 196703021996031001</p>
                             </div>
                         </div>
                     </div>
-
-                    {/* Realtime Analysis Chart Card */}
-                    <div onClick={() => onNavigate(ViewState.REPORTS)} className="relative min-w-[280px] md:min-w-[320px] snap-center cursor-pointer group transition-transform duration-500 hover:scale-[1.02]">
-                        <div className="relative z-10 p-6 rounded-[2.5rem] bg-gradient-to-br from-indigo-700 to-indigo-900 text-white shadow-xl h-[200px] flex flex-col overflow-hidden border border-white/5">
-                            <div className="relative z-10 flex flex-col h-full">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="flex items-center gap-2">
-                                        <div className="p-1.5 rounded-lg bg-white/10 border border-white/10"><ChartBarIcon className="w-4 h-4 text-white" /></div>
-                                        <span className="text-[10px] font-black uppercase tracking-widest">Analitik Realtime</span>
-                                    </div>
-                                    <span className="text-[7px] font-black bg-white/20 px-2 py-0.5 rounded-md uppercase animate-pulse">Live Sync</span>
-                                </div>
-                                <div className="flex-1 flex items-end justify-between gap-2 px-1 pb-1">
-                                    {trendData.map((d, i) => (
-                                        <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-                                            <div className={`w-full rounded-t-lg transition-all duration-1000 relative ${d.val >= 90 ? 'bg-emerald-400' : 'bg-amber-400'}`} style={{ height: showChart ? `${Math.max(15, d.val * 0.65)}%` : '0%' }}></div>
-                                            <span className="text-[7px] font-black opacity-50 uppercase">{d.day.substring(0,1)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="mt-2 text-[8px] font-black uppercase tracking-[0.2em] opacity-60 flex items-center justify-between"><span>Detail Aktifitas</span><ArrowRightIcon className="w-3 h-3 group-hover:translate-x-1 transition-transform" /></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Integrated Class Analysis */}
-                    {classDetailedStats.map((cls, i) => (
-                        <div key={`cls-${i}`} className="min-w-[260px] snap-center bg-white dark:bg-[#151E32] p-6 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:shadow-xl transition-all h-[200px] flex flex-col justify-between">
-                            <div className="absolute -top-10 -right-10 w-24 h-24 bg-indigo-500/5 blur-3xl rounded-full"></div>
-                            <div className="flex justify-between items-start relative z-10">
-                                <div>
-                                    <p className="text-[8px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-1">Rombel Performa</p>
-                                    <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">{cls.name}</h4>
-                                </div>
-                                <div className={`px-2.5 py-1 rounded-lg text-[10px] font-black ${cls.pct >= 90 ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                                    {cls.pct}%
-                                </div>
-                            </div>
-                            
-                            <div className="space-y-3 relative z-10">
-                                <div className="flex justify-between items-end">
-                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{cls.totalStudents} Siswa Terdaftar</span>
-                                    <UsersGroupIcon className="w-4 h-4 text-slate-200" />
-                                </div>
-                                <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                    <div className={`h-full rounded-full transition-all duration-1000 ${cls.pct >= 90 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${cls.pct}%` }}></div>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-
-                    <StatCardMini label="Peserta Didik" val={stats.students} icon={UsersGroupIcon} grad="from-blue-600 to-indigo-800" detail={`${maleStudents} L • ${femaleStudents} P`} onPress={() => onNavigate(ViewState.STUDENTS)} />
-                    <StatCardMini label="Direktori Guru" val={stats.teachers} icon={BriefcaseIcon} grad="from-emerald-600 to-teal-800" detail="Direktori GTK" onPress={() => onNavigate(ViewState.TEACHERS)} />
+                    <StatCardMini label={isWaliKelas ? "Siswa Kelas" : "Siswa Aktif"} val={isWaliKelas ? (maleStudents + femaleStudents) : stats.students} icon={UsersGroupIcon} grad="from-blue-600 to-indigo-800" detail={`${maleStudents} L • ${femaleStudents} P`} onPress={() => onNavigate(ViewState.STUDENTS)} />
                 </>
-            )}
-
-            {/* Academic Summary for Student */}
-            {isStudent && (
-                <div onClick={() => onNavigate(ViewState.REPORT_CARDS)} className="min-w-[260px] snap-center bg-white dark:bg-[#151E32] rounded-[2.5rem] p-5 border border-slate-100 dark:border-slate-800 shadow-sm cursor-pointer group overflow-hidden relative">
-                    <div className="absolute top-0 right-0 p-6 opacity-[0.03] -rotate-12"><AcademicCapIcon className="w-24 h-24" /></div>
-                    <div className="relative z-10">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Indeks Prestasi</p>
-                        <h3 className="text-2xl font-black text-slate-800 dark:text-white mb-4">Mutu: A</h3>
-                        <div className="flex items-center gap-3">
-                            <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                <div className="h-full bg-emerald-500 w-[92%]"></div>
-                            </div>
-                            <span className="text-10px font-black text-emerald-500">92%</span>
-                        </div>
-                    </div>
-                </div>
             )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-10 scrollbar-hide pb-40">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide pb-32 z-10">
         
-        {/* --- STUDENT QUICK ACCESS --- */}
         {isStudent && (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <div onClick={() => onNavigate(ViewState.ID_CARD)} className="bg-white dark:bg-[#151E32] p-8 rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col items-center gap-5 group cursor-pointer active:scale-95 transition-all">
-                    <div className="w-20 h-20 rounded-[2.2rem] bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 transition-transform group-hover:scale-110">
-                        <QrCodeIcon className="w-10 h-10" />
+            <div className="animate-in fade-in slide-in-from-bottom-6 duration-700 delay-300">
+                <div onClick={() => onNavigate(ViewState.ID_CARD)} className="bg-white p-6 rounded-[2.5rem] border border-white/40 dark:border-slate-800 shadow-[0_10px_25px_rgba(0,0,0,0.1)] flex flex-col items-center gap-3 group cursor-pointer active:scale-95 transition-all">
+                    <div className="w-16 h-16 rounded-[1.8rem] bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 transition-all group-hover:bg-indigo-600 group-hover:text-white">
+                        <QrCodeIcon className="w-8 h-8" />
                     </div>
                     <div className="text-center">
-                        <h4 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-tight">KARTU PELAJAR DIGITAL</h4>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-[0.2em]">Tunjukkan saat presensi mandiri di gerbang</p>
-                    </div>
-                    <div className="mt-2 px-6 py-2 bg-indigo-600 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20">
-                        Buka Kartu
+                        <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">KARTU PELAJAR DIGITAL</h4>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase mt-1 tracking-widest">Tunjukkan pada Petugas Gerbang</p>
                     </div>
                 </div>
             </div>
         )}
 
-        {/* --- GRID MENU --- */}
-        <div className="grid grid-cols-4 sm:grid-cols-8 gap-6">
+        {/* Menu Grid - Solid Background Icons */}
+        <div className="grid grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-400">
             {quickMenuItems.map((item, idx) => item.show && (
-                <button key={idx} onClick={() => onNavigate(item.view)} className="flex flex-col items-center gap-2 group">
-                    <div className={`w-14 h-14 rounded-[1.8rem] flex items-center justify-center shadow-sm border border-black/5 active:scale-90 transition-all group-hover:-translate-y-1 ${item.bg}`}>
-                        <item.icon className={`w-6 h-6 transition-transform group-hover:scale-110 ${item.color}`} />
+                <button key={idx} onClick={() => onNavigate(item.view)} className="flex flex-col items-center gap-1.5 group">
+                    <div className={`w-12 h-12 rounded-[1.4rem] flex items-center justify-center shadow-[0_4px_10px_rgba(0,0,0,0.05)] border border-slate-100 dark:border-slate-700 active:scale-90 transition-all ${item.bg}`}>
+                        <item.icon className={`w-5 h-5 ${item.color}`} />
                     </div>
-                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 text-center truncate w-full px-1">{item.label}</span>
+                    <span className="text-[7px] font-black uppercase tracking-widest text-slate-800 dark:text-slate-200 text-center truncate w-full px-0.5">{item.label}</span>
                 </button>
             ))}
         </div>
 
-        {/* --- AGENDA WIDGET --- */}
-        <div className="space-y-4">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] px-1">
-                {isStudent ? 'JADWAL HARI INI' : 'Agenda Terintegrasi'}
+        {/* Agenda Section */}
+        <div className="space-y-3 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
+            <h3 className="text-[9px] font-black text-slate-900 dark:text-white uppercase tracking-widest px-1">
+                {isStudent ? 'JADWAL HARI INI' : 'Agenda Mendatang'}
             </h3>
-            <div className="bg-white dark:bg-[#151E32] rounded-[2.5rem] p-2 shadow-sm border border-slate-100 dark:border-slate-800 transition-all">
-                <div className="flex items-center gap-5 p-4">
-                    <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-[1.5rem] flex flex-col items-center justify-center font-black shadow-sm group">
-                        <span className="text-[11px]">07:30</span>
-                        <div className="w-4 h-0.5 bg-indigo-200 dark:bg-indigo-500/30 my-1"></div>
-                        <span className="text-[11px]">09:00</span>
+            <div className="bg-white dark:bg-[#151E32] rounded-[2rem] p-1.5 shadow-md border border-white/40 dark:border-slate-800">
+                <div className="flex items-center gap-4 p-3">
+                    <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex flex-col items-center justify-center font-black shrink-0 shadow-lg shadow-indigo-500/20">
+                        <span className="text-[9px]">07:30</span>
                     </div>
                     <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase truncate">
-                            {isStudent ? 'Matematika Wajib' : 'KBM Inti Akademik'}
+                        <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase truncate">
+                            {isStudent ? 'Matematika Wajib' : 'Kegiatan KBM'}
                         </h4>
-                        <div className="text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mt-1 flex items-center gap-1.5">
-                            {isStudent ? <><UserIcon className="w-3 h-3" /> Budi Santoso, S.Pd</> : <><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div> Status: Aktif</>}
-                        </div>
                     </div>
-                    {isStudent && (
-                        <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl text-[8px] font-black text-slate-400 border border-slate-100 dark:border-slate-700">
-                            R. 12
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
 
-        {/* --- HELP ASSISTANT (AI) --- */}
-        <div onClick={() => onNavigate(ViewState.ADVISOR)} className="bg-indigo-50 dark:bg-indigo-900/10 rounded-[2.5rem] p-6 border border-indigo-100 dark:border-indigo-800/50 cursor-pointer group active:scale-[0.98] transition-all">
-            <div className="flex gap-4 items-start">
-                <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 flex items-center justify-center shadow-md"><RobotIcon className="w-6 h-6 text-indigo-600" /></div>
-                <div className="flex-1">
-                    <h4 className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1">Butuh Bantuan Live Chat?</h4>
-                    <p className="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed font-medium">Tanyakan tentang fitur sistem kepada asisten cerdas IMAM melalui Live Chat.</p>
-                </div>
-                <ArrowRightIcon className="w-5 h-5 text-indigo-300 group-hover:translate-x-1 transition-transform" />
-            </div>
+        <div className="bg-white dark:bg-slate-800/80 rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-700 p-8 text-center opacity-60 shadow-inner">
+            <p className="text-[9px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-[0.3em]">IMAM Management v6.1 • 2025</p>
         </div>
+
       </div>
+
+      <style>{`
+        @keyframes bounce-slow {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        .animate-bounce-slow {
+          animation: bounce-slow 3s infinite ease-in-out;
+        }
+      `}</style>
     </div>
   );
 };
 
 const StatCardMini = ({ label, val, icon: Icon, grad, detail, onPress }: any) => (
-    <div onClick={onPress} className="relative min-w-[260px] md:min-w-[300px] snap-center cursor-pointer group transition-all duration-500 hover:scale-[1.02]">
-        <div className={`relative z-10 p-6 rounded-[2.5rem] bg-gradient-to-br ${grad} text-white shadow-xl h-[200px] flex flex-col overflow-hidden`}>
+    <div onClick={onPress} className="relative min-w-[220px] snap-center cursor-pointer group">
+        <div className={`relative z-10 p-4 rounded-[2rem] bg-gradient-to-br ${grad} text-white shadow-xl h-[160px] flex flex-col overflow-hidden`}>
             <div className="relative z-10 flex flex-col h-full">
-                <div className="flex justify-between items-start mb-6"><div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 group-hover:bg-white/20 transition-colors shadow-lg"><Icon className="w-6 h-6" /></div><span className="bg-white/20 px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest group-hover:bg-white/30 transition-colors">Summary</span></div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">{label}</p>
-                <h3 className="text-4xl font-black mt-1 group-hover:translate-x-1 transition-transform">{val}</h3>
-                <div className="mt-auto flex items-center justify-between text-[8px] font-black uppercase tracking-widest opacity-60"><span>{detail}</span><ArrowRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></div>
+                <div className="flex justify-between items-start mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-lg"><Icon className="w-5 h-5" /></div>
+                </div>
+                <p className="text-[9px] font-black uppercase tracking-widest opacity-70">{label}</p>
+                <h3 className="text-3xl font-black mt-0.5">{val}</h3>
+                <div className="mt-auto flex items-center justify-between text-[7px] font-black uppercase tracking-widest opacity-60"><span>{detail}</span><ArrowRightIcon className="w-3 h-3" /></div>
             </div>
         </div>
     </div>
