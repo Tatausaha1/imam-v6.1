@@ -33,27 +33,29 @@ export const recordAttendanceByScan = async (rawCode: string, session: Attendanc
     const today = format(now, "yyyy-MM-dd");
     const nowFull = format(now, "HH:mm:ss");
     
-    // LOGIKA PERHITUNGAN TERLAMBAT (Batas: 07:30)
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    const lateThreshold = 7 * 60 + 30; // 07:30
-    const earlyThreshold = 16 * 60;    // 16:00
+    
+    // THRESHOLDS
+    const startThreshold = 7 * 60 + 30; // 07:30 (Batas Masuk)
+    const endThreshold = 16 * 60;       // 16:00 (Batas Pulang)
 
     const isPrayerSession = ['Duha', 'Zuhur', 'Ashar'].includes(session);
     const effectiveHaid = isHaid && isPrayerSession;
     
     let nowValue = nowFull;
-    let isLate = false;
-    let isEarly = false;
-    let diffMinutes = 0;
-    
-    if (session === 'Masuk' && !effectiveHaid && currentMinutes > lateThreshold) {
-        isLate = true;
-        diffMinutes = currentMinutes - lateThreshold;
-        nowValue = `${nowFull} | +${diffMinutes}`;
-    } else if (session === 'Pulang' && currentMinutes < earlyThreshold) {
-        isEarly = true;
-        diffMinutes = earlyThreshold - currentMinutes;
-        nowValue = `${nowFull} | -${diffMinutes}`;
+    let meta = "";
+
+    // LOGIKA KOREKSI OTOMATIS
+    if (session === 'Masuk' && currentMinutes > startThreshold) {
+        const lateMin = currentMinutes - startThreshold;
+        meta = `+${lateMin}`;
+    } else if (session === 'Pulang' && currentMinutes < endThreshold) {
+        const earlyMin = endThreshold - currentMinutes;
+        meta = `-${earlyMin}`;
+    }
+
+    if (meta) {
+        nowValue = `${nowFull} | ${meta}`;
     } else if (effectiveHaid) {
         nowValue = `${nowFull} (Haid)`;
     }
@@ -99,17 +101,21 @@ export const recordAttendanceByScan = async (rawCode: string, session: Attendanc
             [fieldName]: nowValue
         };
 
-        if (currentData?.status && !['Alpha', 'Haid'].includes(currentData.status)) {
+        // Otomatis tentukan status
+        if (effectiveHaid) {
+            updatePayload.status = 'Haid';
+        } else if (currentData?.status && currentData.status !== 'Alpha' && currentData.status !== 'Haid') {
             updatePayload.status = currentData.status;
         } else {
-            updatePayload.status = 'Hadir';
+            // Jika masuk lewat dari jam 07:30 simpan sebagai Terlambat di DB, tapi UI akan tampilkan sebagai Hadir
+            updatePayload.status = (session === 'Masuk' && currentMinutes > startThreshold) ? 'Terlambat' : 'Hadir';
         }
 
         await attendanceRef.set(updatePayload, { merge: true });
 
         return { 
             success: true, 
-            message: `${session.toUpperCase()} ${isLate ? `(+${diffMinutes}m)` : isEarly ? `(-${diffMinutes}m)` : 'BERHASIL'}`, 
+            message: `${session.toUpperCase()} ${meta ? `(${meta})` : 'BERHASIL'}`, 
             student: studentData 
         };
     } catch (error: any) {

@@ -95,17 +95,6 @@ const Settings: React.FC<SettingsProps> = ({
     toast.info(`Widget ${id} ${newVisible[id] ? 'ditampilkan' : 'disembunyikan'}`);
   };
 
-  const handleResetTheme = () => {
-    const defaults = {
-        bg: isDarkMode ? '#1e293b' : '#ffffff',
-        primary: isDarkMode ? '#818cf8' : '#4f46e5',
-        secondary: isDarkMode ? '#312e81' : '#e0e7ff',
-        border: isDarkMode ? '#334155' : '#f1f5f9'
-    };
-    setThemeConfig(defaults);
-    toast.success("Tema berita diatur ulang ke default");
-  };
-
   const menuItems = [
     {
       label: 'Edit Data Profil',

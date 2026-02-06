@@ -33,7 +33,6 @@ const iconMap: Record<string, any> = {
     'SparklesIcon': SparklesIcon
 };
 
-// Use React.FC to properly handle standard props like 'key' in list rendering
 const FAQItem: React.FC<FAQItemData> = ({ question, answer, iconName }) => {
   const [isOpen, setIsOpen] = useState(false);
   const Icon = iconMap[iconName] || InfoIcon;
@@ -67,16 +66,17 @@ const FAQItem: React.FC<FAQItemData> = ({ question, answer, iconName }) => {
 
 const About: React.FC<AboutProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
-  const [content, setContent] = useState<AboutContent>({
+  const [content, setContent] = useState<AboutContent & { devRole?: string }>({
     engineVersion: '6.1.4',
-    brandingText: 'Ekosistem digital madrasah masa depan yang menjembatani teknologi, transparansi, dan inklusivitas pendidikan.',
+    brandingText: 'Ekosistem digital madrasah masa depan yang menjembatani teknologi, transparansi, dan inklusivitas pendidikan di MAN 1 Hulu Sungai Tengah.',
     devName: 'AKHMAD ARIFIN',
     devNip: '19901004 202521 1012',
-    devQuote: 'Menghadirkan solusi teknologi yang memberikan dampak nyata bagi pendidikan dan masyarakat.',
+    devRole: 'Penata Layanan Operasional',
+    devQuote: 'Menghadirkan solusi teknologi yang memberikan dampak nyata bagi efisiensi layanan operasional pendidikan dan masyarakat.',
     faqs: [
-        { iconName: 'BanknotesIcon', question: 'Mengapa program ini layak didanai?', answer: 'IMAM v6.1 bukan sekadar aplikasi, tapi infrastruktur masa depan. Penghematan biaya operasional rutin madrasah dijamin tercapai dalam waktu singkat.' },
-        { iconName: 'GlobeAltIcon', question: 'Apakah bisa dikembangkan lebih luas?', answer: 'Sangat bisa. Arsitektur kami bersifat Modular dan Scalable, siap direplikasi ke madrasah lain.' },
-        { iconName: 'ShieldCheckIcon', question: 'Bagaimana akuntabilitas pelaporannya?', answer: 'Sistem menyediakan dashboard khusus pimpinan yang mencatat setiap metrik penggunaan secara realtime.' }
+        { iconName: 'BanknotesIcon', question: 'Mengapa program ini layak didanai?', answer: 'IMAM v6.1 bukan sekadar aplikasi, tapi infrastruktur masa depan. Penghematan biaya operasional rutin madrasah dijamin tercapai dalam waktu singkat melalu digitalisasi proses.' },
+        { iconName: 'GlobeAltIcon', question: 'Apakah bisa dikembangkan lebih luas?', answer: 'Sangat bisa. Arsitektur kami bersifat Modular dan Scalable, siap direplikasi ke berbagai tingkatan satuan pendidikan madrasah.' },
+        { iconName: 'ShieldCheckIcon', question: 'Bagaimana akuntabilitas pelaporannya?', answer: 'Sistem menyediakan dashboard khusus pimpinan yang mencatat setiap metrik penggunaan secara realtime untuk audit internal.' }
     ]
   });
 
@@ -89,7 +89,8 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
         try {
             const doc = await db.collection('about_content').doc('main').get();
             if (doc.exists) {
-                setContent(doc.data() as AboutContent);
+                const data = doc.data();
+                setContent(prev => ({ ...prev, ...data }));
             }
         } catch (e) {
             console.warn("Using local fallback content");
@@ -151,34 +152,50 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                     </div>
                 </div>
 
-                {/* Partnership & Impact */}
+                {/* Developer Info Card - UPDATED WITH USER REQUESTED DATA */}
                 <div className="space-y-4">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] px-2 flex items-center gap-2">
-                        <StarIcon className="w-4 h-4 text-amber-500" /> Peluang Kemitraan & CSR
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-indigo-600 rounded-[2rem] p-6 text-white shadow-lg relative overflow-hidden group">
-                            <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform"></div>
-                            <ChartBarIcon className="w-8 h-8 mb-4 opacity-50" />
-                            <h4 className="text-sm font-black uppercase tracking-tight mb-2">Impact Reporting</h4>
-                            <p className="text-[10px] text-indigo-100 leading-relaxed font-medium">
-                                Dapatkan laporan audit dampak sosial nyata untuk program CSR Anda, mulai dari jumlah siswa terbantu hingga efisiensi lingkungan.
-                            </p>
+                    <div className="flex items-center justify-between px-2">
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Arsitek Sistem</h3>
+                        <div className="px-2 py-1 bg-indigo-600 rounded text-[7px] font-black text-white uppercase tracking-widest">Verified Developer</div>
+                    </div>
+                    <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] border border-slate-100 dark:border-slate-700 overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-500">
+                        <div className="p-6 flex items-center gap-5 border-b border-slate-50 dark:border-slate-700/50 bg-gradient-to-r from-slate-50/50 to-transparent dark:from-indigo-900/10">
+                            <div className="w-20 h-20 rounded-[1.8rem] bg-indigo-50 dark:bg-indigo-900/30 overflow-hidden shadow-lg border-2 border-indigo-100 dark:border-indigo-800 shrink-0 group">
+                                <img src={devPhoto} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={content.devName} />
+                            </div>
+                            <div className="min-w-0">
+                                <h4 className="font-black text-slate-800 dark:text-white uppercase tracking-tight text-lg leading-tight truncate">{content.devName}</h4>
+                                <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
+                                    <ShieldCheckIcon className="w-3.5 h-3.5" />
+                                    {content.devRole}
+                                </p>
+                            </div>
                         </div>
-                        <div className="bg-white dark:bg-slate-800 rounded-[2rem] p-6 border border-slate-100 dark:border-slate-700 shadow-sm relative overflow-hidden group">
-                            <UsersIcon className="w-8 h-8 mb-4 text-indigo-600 opacity-50" />
-                            <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight mb-2">Strategic Branding</h4>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
-                                Eksposur merek yang berkelanjutan kepada ribuan user melalui integrasi logo pada kartu digital dan portal utama.
-                            </p>
+                        <div className="p-6 bg-slate-50/30 dark:bg-slate-800/30">
+                            <div className="flex items-start gap-4">
+                                <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-700 flex items-center justify-center shadow-sm border border-slate-100 dark:border-slate-600 shrink-0">
+                                    <CommandLineIcon className="w-4 h-4 text-indigo-500" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex flex-col gap-0.5 mb-3">
+                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Nomor Induk Pegawai</span>
+                                        <p className="text-xs font-mono font-black text-slate-600 dark:text-slate-300 uppercase tracking-tighter">
+                                            {content.devNip}
+                                        </p>
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium italic pr-4 border-l-2 border-indigo-200 dark:border-indigo-800 pl-4">
+                                        "{content.devQuote}"
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* FAQ Section from Firestore */}
+                {/* FAQ Section */}
                 <div className="space-y-4">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] px-2 flex items-center gap-2">
-                        <ShieldCheckIcon className="w-4 h-4 text-indigo-500" /> Pertanyaan Pihak Eksternal
+                        <ShieldCheckIcon className="w-4 h-4 text-indigo-500" /> Informasi Teknis & Strategis
                     </h3>
                     <div className="space-y-3">
                         {content.faqs.map((faq, idx) => (
@@ -189,35 +206,6 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                                 answer={faq.answer}
                             />
                         ))}
-                    </div>
-                </div>
-
-                {/* Developer Info Card */}
-                <div className="space-y-4">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] px-2">Arsitek Sistem</h3>
-                    <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] border border-slate-100 dark:border-slate-700 overflow-hidden shadow-sm">
-                        <div className="p-6 flex items-center gap-5 border-b border-slate-50 dark:border-slate-700/50">
-                            <div className="w-14 h-14 rounded-[1.2rem] bg-indigo-50 dark:bg-indigo-900/30 overflow-hidden shadow-lg border border-indigo-100 dark:border-indigo-800">
-                                <img src={devPhoto} className="w-full h-full object-cover" alt={content.devName} />
-                            </div>
-                            <div>
-                                <h4 className="font-black text-slate-800 dark:text-white uppercase tracking-tight text-base">{content.devName}</h4>
-                                <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest mt-0.5">Penata Layanan Operasional</p>
-                            </div>
-                        </div>
-                        <div className="p-5 bg-slate-50/50 dark:bg-slate-800/30">
-                            <div className="flex items-start gap-4">
-                                <CommandLineIcon className="w-4.5 h-4.5 text-indigo-500 mt-1 shrink-0" />
-                                <div className="flex-1">
-                                    <p className="text-[10px] text-slate-600 dark:text-slate-300 font-mono font-bold uppercase mb-2">
-                                        NIP. {content.devNip}
-                                    </p>
-                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium italic">
-                                        "{content.devQuote}"
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -254,10 +242,10 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
 
         <div className="text-center pb-12 pt-4 opacity-40">
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.1em] mb-1 leading-relaxed">
-                © Akhmad Arifin I 19901004 202521 1012 I Penata Layanan Operasional
+                © {content.devName} I {content.devNip} I {content.devRole}
             </p>
             <p className="text-[8px] font-mono text-slate-400 mt-2 uppercase tracking-[0.2em]">
-                &copy; 2025 MAN 1 Hulu Sungai Tengah.
+                &copy; 2025 MAN 1 Hulu Sungai Tengah. All rights reserved.
             </p>
         </div>
 

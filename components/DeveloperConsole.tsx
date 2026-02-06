@@ -6,14 +6,14 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { db, isMockMode } from '../services/firebase';
+import { repairStudentDatabase } from '../services/studentService';
 import Layout from './Layout';
 import { 
   CommandLineIcon, ArrowPathIcon, UsersGroupIcon, TrashIcon, PlusIcon,
   UserIcon, Search, PencilIcon, XCircleIcon, SaveIcon, Loader2, 
   BuildingLibraryIcon, StarIcon, BookOpenIcon,
   MegaphoneIcon, BriefcaseIcon, FileSpreadsheet, RectangleStackIcon, ShieldCheckIcon,
-  // Fix: Added missing icon imports
-  ClockIcon, InfoIcon
+  ClockIcon, InfoIcon, SparklesIcon
 } from './Icons';
 import { toast } from 'sonner';
 
@@ -26,6 +26,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
   const [stats, setStats] = useState<Record<string, number>>({});
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
   const [logs, setLogs] = useState<string[]>([]);
+  const [isRepairing, setIsRepairing] = useState(false);
 
   // Database Explorer State
   const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
@@ -47,7 +48,6 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
       { id: 'students', label: 'Siswa', icon: UsersGroupIcon },
       { id: 'teachers', label: 'Guru', icon: BriefcaseIcon },
       { id: 'classes', label: 'Kelas', icon: BuildingLibraryIcon },
-      // Fix: ClockIcon is now correctly imported
       { id: 'attendance', label: 'Presensi', icon: ClockIcon },
       { id: 'letters', label: 'Surat', icon: MegaphoneIcon },
       { id: 'schedules', label: 'Jadwal', icon: StarIcon },
@@ -77,6 +77,23 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
         setConnectionStatus('error');
         addLog(`Gagal Cek DB: ${e.message}`);
     }
+  };
+
+  const handleRepairStudents = async () => {
+      if (isRepairing) return;
+      setIsRepairing(true);
+      addLog("MENGINISIASI PERBAIKAN SCHEMA SISWA...");
+      
+      try {
+          const updatedCount = await repairStudentDatabase((progress) => addLog(progress));
+          addLog(`SUKSES: ${updatedCount} data lama berhasil ditambal field isClaimed & authUid.`);
+          toast.success(`${updatedCount} Record diperbarui.`);
+      } catch (e: any) {
+          addLog(`MIGRASI GAGAL: ${e.message}`);
+          toast.error("Gagal melakukan migrasi data.");
+      } finally {
+          setIsRepairing(false);
+      }
   };
 
   const loadCollectionData = async (colId: string) => {
@@ -113,8 +130,6 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
           setTableLoading(false);
       }
   };
-
-  // --- CRUD ACTIONS ---
 
   const handleOpenAdd = () => {
       setEditorMode('add');
@@ -182,7 +197,6 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
       }
   };
 
-  // Spreadsheet Logic
   const tableHeaders = useMemo(() => {
       if (tableData.length === 0) return [];
       const keys = new Set<string>();
@@ -209,7 +223,6 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
     <Layout title="System Console" subtitle="Enterprise Kernel Control" icon={CommandLineIcon} onBack={onBack}>
       <div className="flex flex-col h-full bg-[#f1f5f9] dark:bg-[#020617] overflow-hidden transition-colors">
           
-          {/* Dashboard Header Bar */}
           <div className="bg-white dark:bg-[#0B1121] border-b border-slate-200 dark:border-slate-800 p-2 flex items-center justify-between gap-4 z-20">
               <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
                   <button onClick={() => setActiveTab('overview')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'overview' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600' : 'text-slate-400'}`}>Overview</button>
@@ -228,7 +241,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
                               className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-lg py-1.5 pl-8 pr-3 text-[10px] font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
                           />
                       </div>
-                      <button onClick={handleOpenAdd} className="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-black uppercase flex items-center gap-2 shadow-lg active:scale-90 transition-all"><PlusIcon className="w-3 h-3" /> Insert Row</button>
+                      <button onClick={handleOpenAdd} className="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-2 shadow-lg active:scale-90 transition-all"><PlusIcon className="w-3 h-3" /> Insert Row</button>
                       <button onClick={() => loadCollectionData(selectedCollection)} className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 active:scale-90"><ArrowPathIcon className="w-4 h-4" /></button>
                       <button onClick={() => setSelectedCollection(null)} className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 active:scale-90"><XCircleIcon className="w-4 h-4" /></button>
                   </div>
@@ -246,6 +259,31 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
                                 <p className="text-xl font-black text-slate-800 dark:text-white mt-1">{stats[t.id] ?? '...'}</p>
                             </div>
                         ))}
+                    </div>
+
+                    <div className="bg-white dark:bg-[#151E32] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+                        <div className="flex items-center gap-3">
+                            <SparklesIcon className="w-5 h-5 text-amber-500" />
+                            <h3 className="text-xs font-black uppercase tracking-widest">Maintenance & Migration</h3>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <button 
+                                onClick={handleRepairStudents}
+                                disabled={isRepairing}
+                                className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-indigo-500 transition-all active:scale-[0.98] group disabled:opacity-50"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600">
+                                        {isRepairing ? <Loader2 className="w-5 h-5 animate-spin" /> : <UsersGroupIcon className="w-5 h-5" />}
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-[10px] font-black uppercase leading-none">Repair Students Schema</p>
+                                        <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">Tambal isClaimed & authUid</p>
+                                    </div>
+                                </div>
+                                <ArrowPathIcon className={`w-4 h-4 text-slate-300 group-hover:text-indigo-500 ${isRepairing ? 'animate-spin' : ''}`} />
+                            </button>
+                        </div>
                     </div>
 
                     <div className="bg-slate-900 rounded-3xl p-6 font-mono text-[10px] flex-1 min-h-[300px] border border-slate-800 shadow-2xl flex flex-col">
@@ -394,7 +432,6 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
                           />
                       </div>
                       <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800 flex gap-3">
-                          {/* Fix: InfoIcon is now correctly imported */}
                           <InfoIcon className="w-5 h-5 text-indigo-500 shrink-0" />
                           <p className="text-[10px] text-indigo-700 dark:text-indigo-300 leading-relaxed font-medium uppercase tracking-tight">Peringatan: Gunakan format JSON yang valid. Seluruh field di dalam JSON akan menimpa (overwrite/merge) data yang sudah ada di database.</p>
                       </div>

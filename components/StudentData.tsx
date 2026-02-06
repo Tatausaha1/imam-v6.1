@@ -228,11 +228,11 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
         {/* --- DATA TABLE --- */}
         <div className="bg-white dark:bg-[#151E32] rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
             <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse table-fixed min-w-[1300px]">
+                <table className="w-full text-left border-collapse table-fixed min-w-[1100px]">
                     <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-20">
                         <tr className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">
                             <th className="w-10 px-2 py-3 text-center border-b border-r border-slate-200 dark:border-slate-800">No</th>
-                            <th className="w-[220px] px-4 py-3 border-b border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 sticky left-0 z-30 text-indigo-600 dark:text-indigo-400">Nama Lengkap</th>
+                            <th className="w-[160px] px-3 py-3 border-b border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 sticky left-0 z-30 text-indigo-600 dark:text-indigo-400">Nama Lengkap</th>
                             <th className="w-24 px-2 py-3 text-center border-b border-r border-slate-200 dark:border-slate-800">ID Unik</th>
                             <th className="w-32 px-2 py-3 text-center border-b border-r border-slate-200 dark:border-slate-800 bg-indigo-50/20 text-indigo-600">Kelas</th>
                             <th className="w-28 px-2 py-3 text-center border-b border-r border-slate-200 dark:border-slate-800 text-emerald-600">Ponsel</th>
@@ -284,7 +284,7 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
                                     <option value="Nonaktif">OFF</option>
                                 </select>
                             </th>
-                            {canManage && <th className="border-slate-200 dark:border-slate-800"></th>}
+                            {canManage && <th className="border-r border-slate-200 dark:border-slate-800"></th>}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -293,7 +293,7 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
                         ) : processedStudents.map((s, idx) => (
                             <tr key={s.id || s.idUnik} className="text-[10px] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                 <td className="px-2 py-3 text-center border-r border-slate-200 dark:border-slate-800 text-slate-400 font-bold">{idx + 1}</td>
-                                <td className="px-4 py-3 border-r border-slate-200 dark:border-slate-800 sticky left-0 bg-white dark:bg-[#151E32] font-black text-slate-700 dark:text-slate-200 uppercase truncate">
+                                <td className="px-3 py-3 border-r border-slate-200 dark:border-slate-800 sticky left-0 bg-white dark:bg-[#151E32] font-black text-slate-700 dark:text-slate-200 uppercase truncate">
                                     {s.namaLengkap}
                                 </td>
                                 <td className="px-2 py-3 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-indigo-600">{s.idUnik}</td>

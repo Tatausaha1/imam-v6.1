@@ -35,21 +35,17 @@ const MobileContainer: React.FC<MobileContainerProps> = ({ children, isDarkTheme
 
   const effectiveMode = isDesktop ? viewMode : 'full';
   
-  // Skala dinamis: Memastikan shell ponsel (iPhone 13 Pro style) selalu pas di layar browser
+  // Skala dinamis: Memastikan shell ponsel selalu pas di layar browser tanpa lag
   const scale = useMemo(() => {
     if (effectiveMode !== 'phone') return 1;
-    const padding = 40; // Margin aman
-    const shellHeight = 844 + 48; // Tinggi visual body ponsel + bezel
-    const shellWidth = 390 + 40;  // Lebar visual body ponsel + shadow
+    const padding = 40; 
+    const shellHeight = 844 + 48; 
+    const shellWidth = 390 + 40;  
     
     const scaleH = (windowHeight - padding) / shellHeight;
     const scaleW = (windowWidth - padding) / shellWidth;
     
-    // Gunakan skala terkecil antara lebar dan tinggi agar tidak terpotong di manapun
-    let finalScale = Math.min(scaleH, scaleW);
-    
-    // Batasi skala agar tidak terlalu besar di layar raksasa atau terlalu kecil di layar mungil
-    return Math.min(1, Math.max(0.4, finalScale));
+    return Math.min(1, Math.max(0.4, Math.min(scaleH, scaleW)));
   }, [windowHeight, windowWidth, effectiveMode]);
 
   const formatTime = (date: Date) => {
@@ -59,11 +55,10 @@ const MobileContainer: React.FC<MobileContainerProps> = ({ children, isDarkTheme
   return (
     <div className={`h-screen w-full transition-all duration-700 flex flex-col relative overflow-hidden ${isDarkTheme ? 'bg-[#020617]' : 'bg-slate-200'}`}>
       
-      {/* --- BACKGROUND AMBIENCE --- */}
+      {/* --- BACKGROUND AMBIENCE (Lightweight) --- */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <div className={`absolute top-[-10%] left-[-10%] w-[70%] h-[70%] rounded-full blur-[150px] opacity-30 transition-colors duration-1000 ${isDarkTheme ? 'bg-indigo-500/20' : 'bg-indigo-400/20'}`}></div>
-        <div className={`absolute bottom-[-10%] right-[-10%] w-[70%] h-[70%] rounded-full blur-[150px] opacity-30 transition-colors duration-1000 ${isDarkTheme ? 'bg-blue-500/20' : 'bg-blue-400/20'}`}></div>
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none"></div>
+        <div className={`absolute top-[-10%] left-[-10%] w-[70%] h-[70%] rounded-full blur-[120px] opacity-20 transition-colors duration-1000 ${isDarkTheme ? 'bg-indigo-500/20' : 'bg-indigo-400/20'}`}></div>
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay pointer-events-none"></div>
       </div>
 
       {/* --- FLOATING TOGGLE (DESKTOP) --- */}
@@ -87,18 +82,20 @@ const MobileContainer: React.FC<MobileContainerProps> = ({ children, isDarkTheme
       )}
 
       {/* --- CONTENT AREA --- */}
-      <div className={`relative z-10 flex-1 flex items-center justify-center transition-all duration-700 h-full w-full overflow-hidden`}>
+      <div className="relative z-10 flex-1 flex items-center justify-center h-full w-full overflow-hidden">
         
         {effectiveMode === 'phone' ? (
-          /* --- PREMIUM PHONE SHELL (WITH AUTO-SCALING) --- */
+          /* --- PREMIUM PHONE SHELL (GPU OPTIMIZED) --- */
           <div 
-            className="relative select-none transition-transform duration-500 ease-out will-change-transform flex items-center justify-center"
-            style={{ transform: `scale(${scale})` }}
+            className="relative select-none flex items-center justify-center transform-gpu transition-transform duration-500 ease-out"
+            style={{ 
+              transform: `scale(${scale}) translate3d(0,0,0)`,
+              willChange: 'transform'
+            }}
           >
             {/* Phone Body Shell */}
             <div className="relative w-[390px] h-[844px] bg-[#0c0c0d] rounded-[4.5rem] p-3 shadow-[0_80px_160px_-40px_rgba(0,0,0,0.7),0_0_0_12px_#1f2123,0_0_0_14px_#2a2c2e] border border-white/10 flex flex-col overflow-hidden ring-1 ring-white/10">
                 
-                {/* Glossy Reflective Screen Polish */}
                 <div className="absolute inset-0 bg-gradient-to-tr from-white/5 via-transparent to-white/10 pointer-events-none rounded-[4.2rem] z-30 opacity-40"></div>
 
                 {/* --- VIRTUAL SCREEN --- */}
@@ -106,23 +103,22 @@ const MobileContainer: React.FC<MobileContainerProps> = ({ children, isDarkTheme
                     
                     {/* Status Bar */}
                     <div className="h-11 w-full shrink-0 flex items-center justify-between px-10 z-[60] pointer-events-none pt-4 bg-transparent">
-                        <span className="text-[14px] font-black text-slate-900 dark:text-white mt-1 transition-colors">{formatTime(time)}</span>
+                        <span className="text-[14px] font-black text-slate-900 dark:text-white mt-1">{formatTime(time)}</span>
                         
-                        {/* Dynamic Island (Notch) */}
-                        <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-28 h-7 bg-[#000] rounded-full flex items-center justify-center gap-2 shadow-2xl border border-white/5 transition-all">
+                        {/* Dynamic Island */}
+                        <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-28 h-7 bg-[#000] rounded-full flex items-center justify-center gap-2 shadow-2xl border border-white/5">
                             <div className="w-1 h-1 rounded-full bg-blue-500/80 animate-pulse"></div>
                             <div className="w-2 h-0.5 rounded-full bg-white/10"></div>
-                            <div className="w-1.5 h-1.5 rounded-full bg-slate-900 border border-white/20 ring-1 ring-blue-500/20"></div>
                         </div>
 
-                        <div className="flex items-center gap-1.5 mt-1 transition-colors">
+                        <div className="flex items-center gap-1.5 mt-1">
                             <SignalIcon className="w-3.5 h-3.5 text-slate-900 dark:text-white" />
                             <WifiIcon className="w-3.5 h-3.5 text-slate-900 dark:text-white" />
                             <BatteryIcon className="w-4 h-4 text-slate-900 dark:text-white" />
                         </div>
                     </div>
 
-                    {/* Content Frame (Actual App) */}
+                    {/* Content Frame */}
                     <div className="flex-1 relative overflow-hidden z-20">
                         {children}
                     </div>
@@ -133,23 +129,14 @@ const MobileContainer: React.FC<MobileContainerProps> = ({ children, isDarkTheme
                     </div>
                 </div>
             </div>
-
-            {/* Subtle Ambient Aura behind the device */}
-            <div className="absolute -inset-48 bg-indigo-600/5 blur-[160px] rounded-full -z-10 animate-pulse"></div>
           </div>
         ) : (
-          /* FULL SCREEN MODE (Standard Edge-to-Edge) */
+          /* FULL SCREEN MODE */
           <div className="w-full h-full animate-in fade-in duration-500 flex flex-col bg-white dark:bg-[#020617] overflow-hidden">
             {children}
           </div>
         )}
       </div>
-      
-      <style>{`
-        .will-change-transform {
-          will-change: transform;
-        }
-      `}</style>
     </div>
   );
 };

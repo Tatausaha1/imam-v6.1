@@ -78,10 +78,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
       items: [
         { label: 'Chat AI', icon: HeadsetIcon, view: ViewState.ADVISOR },
         { label: 'ID Digital', icon: IdentificationIcon, view: ViewState.ID_CARD },
-        { label: 'Log Sesi', icon: ClockIcon, view: ViewState.LOGIN_HISTORY },
         { label: 'User', icon: UserPlusIcon, view: ViewState.CREATE_ACCOUNT, roles: [UserRole.ADMIN, UserRole.DEVELOPER] },
         { label: 'Setelan', icon: CogIcon, view: ViewState.SETTINGS },
-        { label: 'Tentang', icon: InfoIcon, view: ViewState.ABOUT },
       ]
     }
   ];

@@ -34,6 +34,8 @@ export const addStudent = async (student: Student): Promise<void> => {
     await db.collection(COLLECTION_NAME).doc(cleanId).set({
         ...student,
         idUnik: cleanId,
+        isClaimed: student.isClaimed || false,
+        authUid: student.authUid || "",
         createdAt: student.createdAt || new Date().toISOString(),
         lastModified: new Date().toISOString()
     }, { merge: true });
@@ -64,6 +66,41 @@ export const deleteStudent = async (id: string): Promise<void> => {
         await db.collection(COLLECTION_NAME).doc(id).delete();
     } catch (error) {
         console.error("Error deleting student", error);
+        throw error;
+    }
+}
+
+/**
+ * Memperbaiki data lama: Menambahkan isClaimed & authUid ke dokumen yang belum punya.
+ */
+export const repairStudentDatabase = async (callback?: (progress: string) => void): Promise<number> => {
+    if (isMockMode || !db) return 0;
+    
+    try {
+        const snapshot = await db.collection(COLLECTION_NAME).get();
+        const batch = db.batch();
+        let count = 0;
+
+        snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            // Cek apakah field isClaimed atau authUid tidak ada
+            if (data.isClaimed === undefined || data.authUid === undefined) {
+                batch.set(doc.ref, {
+                    isClaimed: data.isClaimed ?? false,
+                    authUid: data.authUid ?? ""
+                }, { merge: true });
+                count++;
+            }
+        });
+
+        if (count > 0) {
+            if (callback) callback(`Mengirim batch ${count} dokumen...`);
+            await batch.commit();
+        }
+        
+        return count;
+    } catch (error) {
+        console.error("Repair Database Error:", error);
         throw error;
     }
 }
@@ -112,6 +149,8 @@ export const bulkImportStudents = async (students: Student[]): Promise<void> => 
           batch.set(ref, { 
               ...student, 
               idUnik: cleanId,
+              isClaimed: student.isClaimed || false,
+              authUid: student.authUid || "",
               lastModified: new Date().toISOString()
           }, { merge: true });
       }

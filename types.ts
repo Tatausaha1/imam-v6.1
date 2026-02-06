@@ -126,6 +126,8 @@ export interface Student {
   namaWali?: string;
   accountStatus?: string;
   linkedUserId?: string;
+  isClaimed?: boolean;
+  authUid?: string;
   disciplinePoints?: number;
   createdAt?: string;
   lastModified?: string;

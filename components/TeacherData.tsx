@@ -120,13 +120,13 @@ const TeacherData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
 
           <div className="bg-white dark:bg-[#151E32] rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
               <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse table-fixed min-w-[1000px]">
+                  <table className="w-full text-left border-collapse table-fixed min-w-[900px]">
                       <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-20 border-b border-slate-200 dark:border-slate-800">
                           <tr className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">
                               <th className="w-10 px-2 py-3 text-center border-r border-slate-200 dark:border-slate-800">No</th>
-                              <th className="w-[240px] px-4 py-3 border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 sticky left-0 z-30">Nama Lengkap</th>
+                              <th className="w-[180px] px-3 py-3 border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 sticky left-0 z-30">Nama Lengkap</th>
                               <th className="w-28 px-2 py-3 text-center border-r border-slate-200 dark:border-slate-800">NIP/NIY</th>
-                              <th className="w-[180px] px-4 py-3 border-r border-slate-200 dark:border-slate-800">Mata Pelajaran</th>
+                              <th className="w-[160px] px-3 py-3 border-r border-slate-200 dark:border-slate-800">Mata Pelajaran</th>
                               <th className="w-24 px-2 py-3 text-center border-r border-slate-200 dark:border-slate-800">Status</th>
                               <th className="w-32 px-2 py-3 text-center border-r border-slate-200 dark:border-slate-800">WhatsApp</th>
                               {canManage && <th className="w-20 px-2 py-3 text-center">Aksi</th>}
@@ -162,11 +162,11 @@ const TeacherData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
                           ) : processedTeachers.map((t, idx) => (
                               <tr key={t.id} className="text-[10px] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                   <td className="px-2 py-3 text-center border-r border-slate-200 dark:border-slate-800 text-slate-400 font-bold">{idx + 1}</td>
-                                  <td className="px-4 py-3 border-r border-slate-200 dark:border-slate-800 sticky left-0 bg-white dark:bg-[#151E32] font-black text-slate-800 dark:text-slate-200 truncate">
+                                  <td className="px-3 py-3 border-r border-slate-200 dark:border-slate-800 sticky left-0 bg-white dark:bg-[#151E32] font-black text-slate-800 dark:text-slate-200 uppercase truncate">
                                       {t.name}
                                   </td>
                                   <td className="px-2 py-3 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-indigo-600">{t.nip || '-'}</td>
-                                  <td className="px-4 py-3 border-r border-slate-200 dark:border-slate-800 font-bold text-slate-500">{t.subject}</td>
+                                  <td className="px-3 py-3 border-r border-slate-200 dark:border-slate-800 font-bold text-slate-500 truncate">{t.subject}</td>
                                   <td className="px-2 py-3 border-r border-slate-200 dark:border-slate-800 text-center">
                                       <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${t.status === 'PNS' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{t.status}</span>
                                   </td>

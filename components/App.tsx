@@ -204,43 +204,46 @@ const App: React.FC = () => {
   const isLoginPage = currentView === ViewState.LOGIN;
 
   return (
-    <div className={`h-full w-full relative flex overflow-hidden bg-white dark:bg-[#020617] ${isDarkTheme ? 'dark' : ''}`}>
-        {isLoginPage ? (
-            <Suspense fallback={<PageLoader />}>
-                {renderViewContent()}
-            </Suspense>
-        ) : (
-            <div className="h-full w-full relative flex overflow-hidden">
-                {/* Desktop Sidebar (Visible in fullscreen mode on large screens) */}
-                <div className="hidden lg:block w-72 lg:w-80 shrink-0 h-full border-r border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-[#0B1121]/50 backdrop-blur-xl z-40">
-                    <Sidebar currentView={currentView} onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />
-                </div>
-                
-                <div className="flex-1 flex flex-col h-full w-full relative overflow-hidden">
-                    {/* Background Ambience (Global) */}
-                    <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-                        <div className={`absolute top-[-10%] left-[-10%] w-[70%] h-[70%] rounded-full blur-[150px] opacity-30 ${isDarkTheme ? 'bg-indigo-500/20' : 'bg-indigo-400/20'}`}></div>
-                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
-                    </div>
+    <div className={`h-screen w-full flex flex-col relative overflow-hidden ${isDarkTheme ? 'bg-[#020617]' : 'bg-[#f8fafc]'} transition-colors duration-500`}>
+        
+        {/* --- BACKGROUND AMBIENCE (Global) --- */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+          <div className={`absolute top-[-10%] left-[-10%] w-[70%] h-[70%] rounded-full blur-[120px] opacity-10 transition-colors duration-1000 ${isDarkTheme ? 'bg-indigo-500/20' : 'bg-indigo-400/10'}`}></div>
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay pointer-events-none"></div>
+        </div>
 
-                    <div className="flex-1 overflow-hidden relative z-10">
-                        <Suspense fallback={<PageLoader />}>
-                            <div key={viewKey} className="h-full w-full relative">
-                                {renderViewContent()}
-                            </div>
-                        </Suspense>
+        <div className="relative z-10 flex-1 flex h-full w-full overflow-hidden">
+            {isLoginPage ? (
+                <Suspense fallback={<PageLoader />}>
+                    {renderViewContent()}
+                </Suspense>
+            ) : (
+                <div className="h-full w-full relative flex overflow-hidden">
+                    {/* Desktop Sidebar - Always visible on large screens */}
+                    <div className="hidden lg:block w-72 lg:w-80 shrink-0 h-full border-r border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-[#0B1121]/50 backdrop-blur-xl z-40">
+                        <Sidebar currentView={currentView} onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />
                     </div>
                     
-                    {/* Bottom Nav on Mobile Devices */}
-                    <div className="shrink-0 z-50">
-                        <BottomNav currentView={currentView} onNavigate={handleNavigate} userRole={userRole} />
+                    <div className="flex-1 flex flex-col h-full w-full relative overflow-hidden">
+                        <div className="flex-1 overflow-hidden relative z-10">
+                            <Suspense fallback={<PageLoader />}>
+                                <div key={viewKey} className="h-full w-full relative">
+                                    {renderViewContent()}
+                                </div>
+                            </Suspense>
+                        </div>
+                        
+                        {/* Bottom Nav: Only show on mobile, fixed at the bottom */}
+                        <div className="shrink-0 z-50 lg:hidden">
+                            <BottomNav currentView={currentView} onNavigate={handleNavigate} userRole={userRole} />
+                        </div>
                     </div>
                 </div>
-            </div>
-        )}
+            )}
+        </div>
         
         {!isOnline && (
-            <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[1000] bg-orange-600/90 backdrop-blur-md text-white text-[8px] font-black uppercase tracking-[0.2em] px-4 py-1 rounded-full shadow-lg">
+            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] bg-orange-600/90 backdrop-blur-md text-white text-[8px] font-black uppercase tracking-[0.2em] px-4 py-1 rounded-full shadow-lg">
                 Mode Offline Aktif
             </div>
         )}

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { auth, db, isMockMode } from '../services/firebase';
 import { ArrowRightIcon, ShieldCheckIcon, AcademicCapIcon, UserIcon, LockIcon, Loader2, SparklesIcon, CalendarIcon, QrCodeIcon, CheckCircleIcon, AppLogo } from './Icons';
@@ -77,7 +78,7 @@ const Register: React.FC<RegisterProps> = ({ onLogin, onLoginClick }) => {
               return;
           }
 
-          if (data?.accountStatus === 'Active') {
+          if (data?.accountStatus === 'Active' || data?.isClaimed === true) {
               setError('Akun untuk siswa ini sudah aktif. Silakan Login.');
               setLoading(false);
               return;
@@ -91,7 +92,7 @@ const Register: React.FC<RegisterProps> = ({ onLogin, onLoginClick }) => {
 
       } catch (err: any) {
           console.error("Verification Error:", err);
-          setError("Gagal memverifikasi data. Pastikan NISN sudah terdaftar.");
+          setError("Gagal memverify data. Pastikan NISN sudah terdaftar.");
       } finally {
           setLoading(false);
       }
@@ -161,7 +162,9 @@ const Register: React.FC<RegisterProps> = ({ onLogin, onLoginClick }) => {
                         await db.collection('students').doc(verifiedStudent.id).update({
                             accountStatus: 'Active',
                             linkedUserId: uid,
-                            email: email
+                            email: email,
+                            isClaimed: true,
+                            authUid: uid
                         });
                     }
                 }
