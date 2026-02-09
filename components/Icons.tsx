@@ -14,6 +14,12 @@ export const HomeIcon = ({ className }: IconProps) => (
 
 export const HouseIcon = HomeIcon;
 
+export const Bars3CenterLeftIcon = ({ className }: IconProps) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h12m-12 5.25h16.5" />
+  </svg>
+);
+
 // Fix: Added missing ArrowDownTrayIcon
 export const ArrowDownTrayIcon = ({ className }: IconProps) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>

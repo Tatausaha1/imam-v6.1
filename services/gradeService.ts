@@ -2,8 +2,8 @@
 import { db, isMockMode } from './firebase';
 import { StudentGrade } from '../types';
 
-const COLLECTION_GRADES = 'nilai';
-const COLLECTION_SUBJECTS = 'mapel';
+const COLLECTION_GRADES = 'grades';
+const COLLECTION_SUBJECTS = 'subjects';
 
 export interface Subject { id: string; name: string; }
 

@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { LockIcon, ArrowRightIcon, Loader2, ShieldCheckIcon, AppLogo, EnvelopeIcon, ArrowPathIcon } from './Icons';
+import React, { useState } from 'react';
+import { LockIcon, ArrowRightIcon, Loader2, ShieldCheckIcon, AppLogo, EnvelopeIcon } from './Icons';
 import { UserRole } from '../types';
 import { auth, db, isMockMode } from '../services/firebase';
 import { toast } from 'sonner';
@@ -69,16 +69,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   return (
     <div className="flex h-screen w-full bg-[#020617] transition-colors duration-500 relative overflow-hidden">
       
-      {/* --- BACKGROUND IMAGE UNTUK MOBILE (Dibuat Lebih Jelas) --- */}
+      {/* --- BACKGROUND IMAGE UNTUK MOBILE (Hanya muncul di Mobile) --- */}
       <div className="absolute inset-0 lg:hidden z-0">
           <img 
             src={mobileBgImage} 
             className="w-full h-full object-cover opacity-100 scale-100" 
             alt="Background" 
           />
-          {/* Overlay Hitam 30% agar background terlihat jelas namun form tetap kontras */}
-          <div className="absolute inset-0 bg-black/30"></div>
-          {/* Gradasi halus di bagian bawah untuk keterbacaan teks kecil */}
+          <div className="absolute inset-0 bg-black/40"></div>
           <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-transparent to-transparent opacity-80"></div>
       </div>
 
@@ -94,7 +92,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
       )}
 
-      {/* --- SIDEBAR DESKTOP --- */}
+      {/* --- SIDEBAR DESKTOP (Split Screen) --- */}
       <div className="hidden lg:flex flex-1 bg-gradient-to-br from-indigo-700 via-blue-600 to-indigo-900 relative items-center justify-center p-12 overflow-hidden">
           <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
           <div className="relative z-10 text-center max-w-lg">
@@ -109,6 +107,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       {/* --- FORM LOGIN --- */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 relative h-full z-10">
         <div className="w-full max-w-sm z-10 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {/* Header Mobile Only */}
             <div className="lg:hidden text-center mb-10">
                 <div className="w-20 h-20 mx-auto bg-white/10 backdrop-blur-xl rounded-[2.5rem] p-3 border border-white/30 shadow-2xl">
                     <AppLogo className="w-full h-full" />
@@ -125,12 +124,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     <div className="group">
                         <label className="block text-[9px] font-black text-white lg:text-slate-400 uppercase tracking-widest mb-2 ml-1 drop-shadow-md">Email / Akun</label>
                         <div className="relative">
-                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 group-focus-within:text-white transition-colors">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 lg:text-slate-400 group-focus-within:text-white lg:group-focus-within:text-indigo-600 transition-colors">
                                 <EnvelopeIcon className="w-5 h-5" />
                             </div>
                             <input 
                                 type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                                className="w-full bg-white/20 backdrop-blur-md lg:bg-white lg:dark:bg-slate-900 border border-white/30 lg:border-slate-200 lg:dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-white lg:text-slate-900 lg:dark:text-white placeholder-white/50 lg:placeholder-slate-300 focus:outline-none focus:ring-4 focus:ring-white/20 focus:border-white transition-all font-bold text-sm shadow-xl"
+                                className="w-full bg-white/10 backdrop-blur-md lg:bg-white lg:dark:bg-slate-900 border border-white/20 lg:border-slate-200 lg:dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-white lg:text-slate-900 lg:dark:text-white placeholder-white/50 focus:outline-none focus:ring-4 focus:ring-white/20 lg:focus:ring-indigo-500/10 focus:border-white lg:focus:border-indigo-500 transition-all font-bold text-sm shadow-xl"
                                 placeholder="Email Anda" required
                             />
                         </div>
@@ -139,12 +138,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     <div className="group">
                         <label className="block text-[9px] font-black text-white lg:text-slate-400 uppercase tracking-widest mb-2 ml-1 drop-shadow-md">Password</label>
                         <div className="relative">
-                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 group-focus-within:text-white transition-colors">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 lg:text-slate-400 group-focus-within:text-white lg:group-focus-within:text-indigo-600 transition-colors">
                                 <LockIcon className="w-5 h-5" />
                             </div>
                             <input 
                                 type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                                className="w-full bg-white/20 backdrop-blur-md lg:bg-white lg:dark:bg-slate-900 border border-white/30 lg:border-slate-200 lg:dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-white lg:text-slate-900 lg:dark:text-white placeholder-white/50 lg:placeholder-slate-300 focus:outline-none focus:ring-4 focus:ring-white/20 focus:border-white transition-all font-bold text-sm shadow-xl"
+                                className="w-full bg-white/10 backdrop-blur-md lg:bg-white lg:dark:bg-slate-900 border border-white/20 lg:border-slate-200 lg:dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-white lg:text-slate-900 lg:dark:text-white placeholder-white/50 focus:outline-none focus:ring-4 focus:ring-white/20 lg:focus:ring-indigo-500/10 focus:border-white lg:focus:border-indigo-500 transition-all font-bold text-sm shadow-xl"
                                 placeholder="••••••••" required
                             />
                         </div>
@@ -167,8 +166,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 </button>
             </form>
             
-            <div className="lg:hidden text-center mt-6">
-                <p className="text-[9px] font-black text-white/50 uppercase tracking-[0.3em]">MAN 1 Hulu Sungai Tengah • 2025</p>
+            <div className="text-center mt-6">
+                <p className="text-[9px] font-black text-white/50 lg:text-slate-400 uppercase tracking-[0.3em]">MAN 1 Hulu Sungai Tengah • 2025</p>
             </div>
         </div>
       </div>

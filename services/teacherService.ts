@@ -1,3 +1,4 @@
+
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -6,7 +7,7 @@
 import { db, isMockMode } from './firebase';
 import { Teacher } from '../types';
 
-const COLLECTION_NAME = 'guru';
+const COLLECTION_NAME = 'teachers';
 
 export const getTeachers = async (): Promise<Teacher[]> => {
   if (isMockMode) return [];
@@ -51,14 +52,12 @@ export const deleteTeacher = async (id: string): Promise<void> => {
     }
 }
 
-// Fix: Added bulkImportTeachers implementation to fix import errors in components/TeacherData.tsx
 export const bulkImportTeachers = async (teachers: Teacher[]): Promise<void> => {
   if (isMockMode) return;
   try {
     if (!db) throw new Error("Database not initialized");
     const batch = db.batch();
     teachers.forEach(teacher => {
-      // Use nip as document ID if available to prevent duplicates, otherwise generate one
       const docId = teacher.nip || db!.collection(COLLECTION_NAME).doc().id;
       const ref = db!.collection(COLLECTION_NAME).doc(docId);
       batch.set(ref, { ...teacher }, { merge: true });

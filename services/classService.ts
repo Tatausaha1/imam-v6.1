@@ -1,23 +1,35 @@
 import { db, isMockMode } from './firebase';
 
-// Fix: Changed teacherId to optional to match ClassData in types.ts and resolve assignability errors in ClassList.tsx
 export interface ClassData {
     id?: string;
     name: string;
     level: string;
+    gradeLevel?: string; // Alias untuk level grade
     teacherId?: string;
     teacherName?: string;
     academicYear: string;
+    captainId?: string;
+    captainName?: string;
     subjects?: string[];
 }
 
-const COLLECTION_NAME = 'kelas';
+const COLLECTION_NAME = 'classes';
 
 export const addClass = async (classData: ClassData): Promise<void> => {
     if (isMockMode) return;
     try {
         if (!db) throw new Error("Database not initialized");
-        await db.collection(COLLECTION_NAME).add(classData);
+        
+        // Jika ID disediakan manual (seperti '10_A'), gunakan sebagai Document ID
+        if (classData.id) {
+            const docId = classData.id;
+            // Hapus properti id dari data sebelum disimpan ke dalam dokumen itu sendiri jika diinginkan, 
+            // namun di sini kita biarkan untuk konsistensi data.
+            await db.collection(COLLECTION_NAME).doc(docId).set(classData);
+        } else {
+            // Jika tidak ada ID, gunakan add() untuk ID acak
+            await db.collection(COLLECTION_NAME).add(classData);
+        }
     } catch (error) {
         throw error;
     }

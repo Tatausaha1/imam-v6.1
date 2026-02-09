@@ -1,138 +1,64 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- Helper Functions ---
+    // --- FUNGSI PEMBANTU ---
     
     function isSignedIn() {
       return request.auth != null;
     }
     
-    function getUserData() {
+    function getUser() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
-    
-    function getUserRole() {
-      let path = /databases/$(database)/documents/users/$(request.auth.uid);
-      return exists(path) ? get(path).data.role : null;
-    }
-    
+
     function isAdmin() {
-      let role = getUserRole();
-      return isSignedIn() && (role == 'admin' || role == 'developer');
-    }
-    
-    function isStaff() {
-      let role = getUserRole();
-      return isSignedIn() && (
-        role == 'admin' || 
-        role == 'developer' || 
-        role == 'Staf' || 
-        role == 'Guru' || 
-        role == 'Wali Kelas' || 
-        role == 'kepala_madrasah'
-      );
+      return isSignedIn() && (getUser().role in ['admin', 'developer']);
     }
 
-    // --- Collection Rules ---
+    // --- ATURAN KOLEKSI ---
 
+    // Koleksi Pengguna
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow delete: if isAdmin();
     }
 
+    // Koleksi Siswa
     match /students/{studentId} {
-      allow get: if true;
-      allow list: if isSignedIn();
-      allow write: if isAdmin() || isStaff();
+      allow get: if true; // Untuk pengecekan NISN saat registrasi
+      allow list, read: if isSignedIn();
+      // Izinkan Admin/Staf atau Siswa itu sendiri saat melakukan klaim akun
+      allow write: if isAdmin() || 
+                    (isSignedIn() && (getUser().role in ['Staf', 'Guru', 'Wali Kelas'])) ||
+                    (isSignedIn() && request.resource.data.linkedUserId == request.auth.uid);
     }
-    
-    match /alumni/{alumniId} {
+
+    // Koleksi Presensi
+    match /attendance/{docId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin() || isStaff();
-    }
-    
-    match /mutasi/{mutasiId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || isStaff();
+      allow write: if isSignedIn(); 
     }
 
-    match /teachers/{teacherId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
+    // Aturan Umum untuk Koleksi Akademik (Read: All Signed In, Write: Admin Only)
+    match /teachers/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /classes/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /academic_years/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /letters/{docId} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /announcements/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /journals/{docId} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /assignments/{docId} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /grades/{docId} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /settings/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /about_content/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /login_logs/{docId} { allow read, write: if isSignedIn(); }
 
-    match /classes/{classId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    match /attendance/{recordId} {
-      allow read: if isStaff() || (isSignedIn() && request.auth.uid == resource.data.studentId);
-      allow write: if isStaff();
-    }
-
-    match /letters/{letterId} {
-      allow read: if isStaff() || (isSignedIn() && request.auth.uid == resource.data.userId);
-      allow create: if isSignedIn();
-      allow update, delete: if isStaff() || (isSignedIn() && request.auth.uid == resource.data.userId);
-    }
-
-    match /academic_years/{yearId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    match /schedules/{scheduleId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    match /journals/{journalId} {
-      allow read: if isStaff();
-      allow write: if isStaff();
-    }
-
-    match /assignments/{assignmentId} {
-      allow read: if isSignedIn();
-      allow write: if isStaff();
-    }
-
-    match /grades/{gradeId} {
-      allow read: if isStaff() || (isSignedIn() && request.auth.uid == resource.data.studentId);
-      allow write: if isStaff();
-    }
-
-    match /settings/{settingId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    match /about_content/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    match /discipline_logs/{logId} {
-      allow read: if isStaff() || (isSignedIn() && request.auth.uid == resource.data.studentId);
-      allow write: if isStaff();
-    }
-    
-    match /violations_master/{ruleId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    match /login_logs/{logId} {
-      allow create: if isSignedIn();
-      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.userId);
-    }
-
+    // Fallback untuk subkoleksi atau koleksi baru
     match /{document=**} {
-      allow read, write: if isAdmin();
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
   }
 }

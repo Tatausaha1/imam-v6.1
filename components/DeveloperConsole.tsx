@@ -1,4 +1,3 @@
-
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -54,7 +53,8 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
       { id: 'journals', label: 'Jurnal', icon: BookOpenIcon },
       { id: 'assignments', label: 'Tugas', icon: RectangleStackIcon },
       { id: 'nilai', label: 'Nilai', icon: ShieldCheckIcon },
-      { id: 'login_logs', label: 'Log Masuk', icon: CommandLineIcon }
+      { id: 'login_logs', label: 'Log Masuk', icon: CommandLineIcon },
+      { id: 'session_configs', label: 'Jam Sesi', icon: ClockIcon } // Added new collection
   ];
 
   const checkAllCollections = async () => {
@@ -193,7 +193,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
           toast.success("Dokumen dihapus", { id: toastId });
           addLog(`DELETE SUCCESS: ${docId}`);
       } catch (e: any) {
-          toast.error("Gagal: " + e.message, { id: toastId });
+          toast.error("Gagal menghapus: " + e.message, { id: toastId });
       }
   };
 

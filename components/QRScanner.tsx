@@ -5,236 +5,361 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats, Html5QrcodeScannerState } from 'html5-qrcode';
 import { recordAttendanceByScan, AttendanceSession } from '../services/attendanceService';
-import Layout from './Layout';
 import { 
-  CheckCircleIcon, XCircleIcon, CameraIcon, 
-  ClockIcon, SunIcon, ArrowPathIcon, 
-  HeartIcon, Loader2
+  CameraIcon, SunIcon, ArrowPathIcon, 
+  HeartIcon, Loader2, ArrowLeftIcon, 
+  CheckCircleIcon, ShieldCheckIcon, ClockIcon, XCircleIcon
 } from './Icons';
+import { db, isMockMode } from '../services/firebase';
 import { toast } from 'sonner';
 
 interface QRScannerProps {
   onBack: () => void;
 }
 
-interface NotificationItem {
-  id: string;
-  name: string;
-  idUnik: string;
-  className: string;
-  status: 'success' | 'error' | 'warning' | 'haid';
-  message: string;
-  timeDiff?: string;
+interface RecentScan {
+    id: string;
+    name: string;
+    time: string;
+    status: string;
+    type: 'success' | 'error' | 'warning' | 'haid';
 }
 
 const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
-  const [session, setSession] = useState<AttendanceSession>('Masuk');
+  const [session, setSession] = useState<AttendanceSession | 'Luar Sesi'>('Luar Sesi');
   const [isHaidMode, setIsHaidMode] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [cameraActive, setCameraActive] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [isTorchOn, setIsTorchOn] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
-  const [flipRotation, setFlipRotation] = useState(0);
+  const [isDbConnected, setIsDbConnected] = useState(false);
+  const [lastScanned, setLastScanned] = useState<RecentScan | null>(null);
+  const [scanHistory, setScanHistory] = useState<RecentScan[]>([]);
+  const [showFlash, setShowFlash] = useState<string | null>(null);
   
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const lastScannedRef = useRef<{id: string, time: number}>({ id: '', time: 0 });
-  const isLocked = useRef(false);
+  const isProcessing = useRef(false);
+  const isMounted = useRef(true);
 
-  const detectSession = useCallback(() => {
+  const playBeep = (type: 'success' | 'error') => {
+    try {
+      const audio = new Audio(type === 'success' 
+        ? 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'
+        : 'https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3'
+      );
+      audio.volume = 0.3;
+      audio.play();
+    } catch (e) {}
+  };
+
+  const detectSession = useCallback((config: any): AttendanceSession | 'Luar Sesi' => {
     const now = new Date();
+    const currentDay = now.getDay();
     const currentTime = now.getHours() * 60 + now.getMinutes();
+    if (config?.workingDays && !config.workingDays.includes(currentDay)) return 'Luar Sesi';
+    
+    const toMin = (t: string) => {
+        if(!t) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    };
 
-    if (currentTime >= 360 && currentTime <= 450) return 'Masuk';
-    if (currentTime > 450 && currentTime <= 600) return 'Duha';
-    if (currentTime > 600 && currentTime <= 840) return 'Zuhur';
-    if (currentTime > 840 && currentTime <= 960) return 'Ashar';
-    return 'Pulang';
+    const mLimit = config ? toMin(config.masukLimit) : 480; 
+    const dStart = config ? toMin(config.duhaStart) : 481; 
+    const dEnd = config ? toMin(config.duhaEnd) : 600;     
+    const zStart = config ? toMin(config.zuhurStart) : 720; 
+    const zEnd = config ? toMin(config.zuhurEnd) : 840;     
+    const aStart = config ? toMin(config.asharStart) : 900; 
+    const aEnd = config ? toMin(config.asharEnd) : 1020;     
+    
+    let pLimitStr = config?.pulangLimit || "16:00";
+    if (currentDay === 5) pLimitStr = config?.pulangLimitJumat || "11:30";
+    const pLimit = toMin(pLimitStr);
+
+    if (currentTime <= mLimit) return 'Masuk';
+    if (currentTime >= dStart && currentTime <= dEnd) return 'Duha';
+    if (currentTime >= zStart && currentTime <= zEnd) return 'Zuhur';
+    if (currentTime >= aStart && currentTime <= aEnd) return 'Ashar';
+    if (currentTime >= pLimit && currentTime <= (pLimit + 240)) return 'Pulang';
+
+    return 'Luar Sesi';
   }, []);
-
-  useEffect(() => {
-    const currentSession = detectSession();
-    setSession(currentSession as AttendanceSession);
-    const interval = setInterval(() => setSession(detectSession() as AttendanceSession), 300000);
-    return () => clearInterval(interval);
-  }, [detectSession]);
-
-  const sessionRef = useRef(session);
-  const haidRef = useRef(isHaidMode);
-  useEffect(() => { sessionRef.current = session; }, [session]);
-  useEffect(() => { haidRef.current = isHaidMode; }, [isHaidMode]);
 
   const handleScan = useCallback(async (decodedText: string) => {
-    const cleanCode = decodedText.replace(/[\x00-\x1F\x7F-\x9F]/g, "").trim();
-    if (!cleanCode) return;
+    const cleanCode = decodedText.trim();
+    if (!cleanCode || isProcessing.current) return;
+    
+    isProcessing.current = true;
 
-    const now = Date.now();
-    if (cleanCode === lastScannedRef.current.id && (now - lastScannedRef.current.time < 3000)) return;
-    if (isLocked.current) return;
-
-    isLocked.current = true;
-    lastScannedRef.current = { id: cleanCode, time: now };
-
-    try {
-      const result = await recordAttendanceByScan(cleanCode, sessionRef.current, haidRef.current);
-      let determinedStatus: NotificationItem['status'] = 'error';
-      let diffText = '';
-
-      if (result.success) {
-          determinedStatus = haidRef.current ? 'haid' : 'success';
-          if (sessionRef.current !== 'Masuk' && result.message.includes('(-')) {
-              diffText = '-' + result.message.split('(-')[1].split(')')[0];
-          }
-      } else if (result.message.includes('SUDAH')) {
-          determinedStatus = 'warning';
-      }
-
-      const newItem: NotificationItem = {
-        id: Math.random().toString(36).substr(2, 9),
-        name: result.student?.namaLengkap || (result.success ? 'TERVERIFIKASI' : 'DATA TIDAK VALID'),
-        idUnik: result.student?.idUnik || cleanCode,
-        className: result.student?.tingkatRombel || 'N/A',
-        status: determinedStatus,
-        message: result.message.split(' (')[0],
-        timeDiff: diffText
-      };
-
-      if (navigator.vibrate) navigator.vibrate(result.success ? 50 : [100, 30, 100]);
-      setNotifications(prev => [newItem, ...prev].slice(0, 3));
-      setTimeout(() => { isLocked.current = false; }, 800);
-      setTimeout(() => setNotifications(prev => prev.filter(item => item.id !== newItem.id)), 5000);
-    } catch (e) { isLocked.current = false; }
-  }, []);
-
-  const startScanner = async () => {
-    if (isInitializing) return;
-    setIsInitializing(true);
-    setCameraError(null);
-
-    if (scannerRef.current) {
-        try { if (scannerRef.current.isScanning) await scannerRef.current.stop(); } catch (e) {}
+    if (session === 'Luar Sesi') {
+        setShowFlash('warning');
+        playBeep('error');
+        const result: RecentScan = {
+            id: cleanCode,
+            name: "Siswa Terdeteksi",
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            status: "Belum Masuk Sesi Aktif",
+            type: 'warning'
+        };
+        setLastScanned(result);
+        setTimeout(() => { setLastScanned(null); setShowFlash(null); isProcessing.current = false; }, 3000);
+        return;
     }
 
     try {
-      const html5QrCode = new Html5Qrcode("reader-core", { formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ], verbose: false });
+      const result = await recordAttendanceByScan(cleanCode, session as AttendanceSession, isHaidMode);
+      
+      if (result.success) {
+          setShowFlash(isHaidMode ? 'haid' : 'success');
+          playBeep('success');
+          if (navigator.vibrate) navigator.vibrate(100);
+
+          const newScan: RecentScan = {
+              id: cleanCode,
+              name: result.student?.namaLengkap || 'Identitas Terverifikasi',
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              status: result.message,
+              type: isHaidMode ? 'haid' : 'success'
+          };
+          setLastScanned(newScan);
+          setScanHistory(prev => [newScan, ...prev].slice(0, 3));
+      } else {
+          setShowFlash('error');
+          playBeep('error');
+          const errScan: RecentScan = {
+              id: cleanCode,
+              name: "Gagal Absensi",
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              status: result.message,
+              type: 'error'
+          };
+          setLastScanned(errScan);
+          toast.error(result.message);
+      }
+      
+      setTimeout(() => { 
+        setLastScanned(null); 
+        setShowFlash(null);
+        isProcessing.current = false; 
+      }, 3000);
+    } catch (e) { 
+        isProcessing.current = false; 
+        setShowFlash(null);
+    }
+  }, [session, isHaidMode]);
+
+  const startScanner = useCallback(async (mode: "environment" | "user") => {
+    if (scannerRef.current) {
+        try { await scannerRef.current.stop(); } catch (e) {}
+    }
+
+    const container = document.getElementById("reader-core");
+    if (!container || !isMounted.current) return;
+
+    try {
+      const html5QrCode = new Html5Qrcode("reader-core", { 
+          formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+          verbose: false
+      });
       scannerRef.current = html5QrCode;
-      await html5QrCode.start({ facingMode }, { fps: 30, qrbox: (w, h) => { const s = Math.floor(Math.min(w, h) * 0.65); return { width: s, height: s }; } }, handleScan, () => {});
-      setCameraActive(true);
-      const track = (html5QrCode as any).getRunningTrack();
-      setHasTorch(!!track?.getCapabilities()?.torch);
+      
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      // Gunakan qrbox yang sangat luas untuk kebebasan scan di seluruh area
+      const qrboxSize = Math.min(width, height) * 0.95;
+
+      await html5QrCode.start(
+        { facingMode: mode }, 
+        { 
+            fps: 30, 
+            qrbox: { width: qrboxSize, height: qrboxSize },
+            aspectRatio: width / height,
+            videoConstraints: { focusMode: "continuous", facingMode: mode } as any
+        }, 
+        handleScan, 
+        () => {}
+      );
+      
+      if (isMounted.current) {
+        try {
+          const capabilities = html5QrCode.getRunningTrackCapabilities();
+          setHasTorch(!!(capabilities as any)?.torch);
+        } catch (e) { setHasTorch(false); }
+      }
     } catch (err: any) {
-      setCameraError("Akses kamera ditolak.");
-      setCameraActive(false);
-    } finally { setIsInitializing(false); }
-  };
+      if (mode === "environment" && isMounted.current) setFacingMode("user");
+    }
+  }, [handleScan]);
 
-  useEffect(() => { startScanner(); return () => { if (scannerRef.current) scannerRef.current.stop().catch(() => {}); }; }, [facingMode]);
+  useEffect(() => {
+    isMounted.current = true;
+    const init = async () => {
+        setIsInitializing(true);
+        let config = null;
+        if (!isMockMode && db) {
+            try {
+                const snap = await db.collection('academic_years').where('isActive', '==', true).limit(1).get();
+                if (!snap.empty) {
+                    config = snap.docs[0].data().config;
+                    setIsDbConnected(true);
+                }
+            } catch (e) { setIsDbConnected(false); }
+        } else { setIsDbConnected(true); }
 
-  const toggleCamera = () => {
-      if (isInitializing) return;
-      setFlipRotation(prev => prev + 180);
-      setFacingMode(prev => prev === "environment" ? "user" : "environment");
-  };
+        if (isMounted.current) {
+          setSession(detectSession(config));
+          setIsInitializing(false);
+        }
+    };
+    init();
+    return () => { isMounted.current = false; };
+  }, [detectSession]);
+
+  useEffect(() => { 
+      if (!isInitializing) startScanner(facingMode);
+      return () => { 
+          if (scannerRef.current && scannerRef.current.getState() === Html5QrcodeScannerState.SCANNING) {
+            scannerRef.current.stop().catch(() => {});
+          }
+      }; 
+  }, [facingMode, isInitializing, startScanner]);
 
   const toggleTorch = async () => {
     if (!scannerRef.current || !hasTorch) return;
     try {
       const next = !isTorchOn;
-      await (scannerRef.current as any).applyVideoConstraints({ advanced: [{ torch: next }] });
+      await scannerRef.current.applyVideoConstraints({ advanced: [{ torch: next }] } as any);
       setIsTorchOn(next);
-    } catch(e) { toast.error("Gagal senter."); }
+    } catch(e) {}
+  };
+
+  const getFlashColor = () => {
+      if (showFlash === 'success') return 'bg-emerald-500/20';
+      if (showFlash === 'error') return 'bg-rose-500/20';
+      if (showFlash === 'warning') return 'bg-amber-500/20';
+      if (showFlash === 'haid') return 'bg-pink-500/20';
+      return 'bg-transparent';
   };
 
   return (
-    <Layout title="Lensa Presensi" subtitle={`Sesi: ${session}`} icon={CameraIcon} onBack={onBack}>
-      <div className="flex flex-col h-full bg-black relative overflow-hidden select-none">
-          
-          {/* Notifications Stack */}
-          <div className="absolute top-4 inset-x-4 z-[70] flex flex-col gap-3 pointer-events-none">
-              {notifications.map((item) => (
-                  <div key={item.id} className="bg-white/95 dark:bg-[#0B1121]/95 backdrop-blur-2xl rounded-[2rem] p-4 shadow-2xl border border-white/20 flex items-center gap-4 animate-in fade-in slide-in-from-top-10 duration-500">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg text-white relative ${item.status === 'error' ? 'bg-rose-600' : item.status === 'haid' ? 'bg-rose-50 border border-rose-200' : item.status === 'warning' ? 'bg-amber-500' : 'bg-emerald-500'}`}>
-                          {item.status === 'error' ? <XCircleIcon className="w-7 h-7" /> : item.status === 'haid' ? <HeartIcon className="w-7 h-7 fill-current text-rose-600" /> : item.status === 'warning' ? <ClockIcon className="w-7 h-7" /> : <CheckCircleIcon className="w-7 h-7" />}
-                          {item.timeDiff && <div className="absolute -bottom-1.5 -right-1.5 px-1.5 py-0.5 rounded-lg text-[8px] font-black border-2 border-white shadow-md bg-rose-600 text-white">{item.timeDiff}</div>}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                          <h4 className={`text-xs font-black uppercase truncate mb-0.5 ${item.status === 'error' ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>{item.name}</h4>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate">{item.message}</p>
-                      </div>
-                  </div>
-              ))}
-          </div>
+    <div className="flex flex-col h-full bg-black relative overflow-hidden select-none">
+        
+        {/* FLASH EFFECT LAYER */}
+        <div className={`absolute inset-0 z-[100] pointer-events-none transition-all duration-200 ${getFlashColor()}`}></div>
 
-          <div className="absolute top-0 inset-x-0 z-30 p-4 bg-gradient-to-b from-black/60 to-transparent pt-6 text-center">
-              <button onClick={() => setIsHaidMode(!isHaidMode)} className={`px-5 py-2.5 rounded-full inline-flex items-center gap-2 border transition-all font-black text-[9px] uppercase tracking-[0.2em] ${isHaidMode ? 'bg-rose-600 border-rose-400 text-white shadow-lg' : 'bg-white/10 border-white/10 text-white/50'}`}>
-                  <HeartIcon className={`w-3.5 h-3.5 ${isHaidMode ? 'fill-current animate-pulse' : ''}`} />
-                  {isHaidMode ? 'Haid Aktif' : 'Mode Haid'}
-              </button>
-          </div>
+        {/* --- CAMERA ENGINE (Truly Full Frame) --- */}
+        <div id="reader-core" className="absolute inset-0 w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:!object-cover opacity-100"></div>
 
-          <div className="flex-1 relative flex items-center justify-center bg-black">
-              <div id="reader-core" className="absolute inset-0 w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover"></div>
-              
-              <div className="absolute inset-0 pointer-events-none z-10 flex flex-col items-center justify-center">
-                  <div className={`relative w-64 h-64 md:w-80 md:h-80 transition-all duration-700 ${notifications.length > 0 ? 'scale-75 opacity-10 blur-xl' : 'scale-100'}`}>
-                      <div className={`absolute top-0 left-0 w-12 h-12 border-t-[4px] border-l-[4px] rounded-tl-[2rem] transition-colors duration-500 ${isHaidMode ? 'border-rose-500' : 'border-indigo-500'}`}></div>
-                      <div className={`absolute top-0 right-0 w-12 h-12 border-t-[4px] border-r-[4px] rounded-tr-[2rem] transition-colors duration-500 ${isHaidMode ? 'border-rose-500' : 'border-indigo-500'}`}></div>
-                      <div className={`absolute bottom-0 left-0 w-12 h-12 border-b-[4px] border-l-[4px] rounded-bl-[2rem] transition-colors duration-500 ${isHaidMode ? 'border-rose-500' : 'border-indigo-500'}`}></div>
-                      <div className={`absolute bottom-0 right-0 w-12 h-12 border-b-[4px] border-r-[4px] rounded-br-[2rem] transition-colors duration-500 ${isHaidMode ? 'border-rose-500' : 'border-indigo-500'}`}></div>
-                      <div className={`absolute inset-x-8 h-0.5 bg-gradient-to-r from-transparent via-current to-transparent animate-scan-y top-0 opacity-60 ${isHaidMode ? 'text-rose-400' : 'text-indigo-400'}`}></div>
-                  </div>
-                  <div className="mt-16 px-6 py-2 bg-black/40 backdrop-blur-xl rounded-full border border-white/5 text-[9px] font-black text-white/50 uppercase tracking-[0.3em]">
-                      {isInitializing ? 'Sinkronisasi...' : 'Scan QR Siswa'}
-                  </div>
-              </div>
+        {/* --- NO OVERLAY OVER CAMERA FEED --- */}
 
-              {/* Minimalist Floating Control Pill */}
-              <div className="absolute bottom-10 inset-x-0 z-40 flex justify-center px-8">
-                  <div className="flex items-center gap-3 bg-black/50 backdrop-blur-2xl px-3 py-3 rounded-full border border-white/10 shadow-2xl ring-1 ring-white/5">
-                      
-                      <button 
-                        onClick={toggleTorch}
-                        disabled={!hasTorch}
-                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-75 ${isTorchOn ? 'bg-yellow-400 text-black shadow-lg' : 'bg-white/5 text-white/40 hover:bg-white/10 disabled:opacity-5'}`}
-                      >
-                        <SunIcon className="w-5 h-5" />
-                      </button>
+        {/* --- DYNAMIC ISLAND NOTIFICATION (SCAN FEEDBACK) --- */}
+        <div className="absolute top-4 inset-x-0 z-[150] flex justify-center pointer-events-none px-4">
+            {lastScanned ? (
+                <div className={`w-full max-w-[340px] backdrop-blur-3xl px-5 py-3.5 rounded-[2.2rem] border shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center gap-4 animate-in slide-in-from-top-10 duration-500 ring-4 ring-black/20 ${
+                    lastScanned.type === 'success' ? 'bg-emerald-600/90 border-emerald-400/40' :
+                    lastScanned.type === 'error' ? 'bg-rose-600/90 border-rose-400/40' :
+                    lastScanned.type === 'haid' ? 'bg-pink-600/90 border-pink-400/40' :
+                    'bg-amber-600/90 border-amber-400/40'
+                }`}>
+                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0 border border-white/20">
+                        {lastScanned.type === 'success' || lastScanned.type === 'haid' ? <CheckCircleIcon className="w-5 h-5 text-white" /> : <XCircleIcon className="w-5 h-5 text-white" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <h4 className="text-[12px] font-black text-white uppercase truncate tracking-tight">{lastScanned.name}</h4>
+                        <p className="text-[9px] font-bold text-white/80 uppercase tracking-widest mt-0.5">{lastScanned.status}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                        <span className="text-[8px] font-mono text-white/60">{lastScanned.time}</span>
+                    </div>
+                </div>
+            ) : (
+                /* Minimal Static pill state */
+                <div className="w-32 h-8 bg-black/60 backdrop-blur-md rounded-full border border-white/5 flex items-center justify-center gap-2 shadow-2xl transition-all duration-700">
+                    <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span className="text-[8px] font-black text-white/40 uppercase tracking-[0.2em]">Ready</span>
+                </div>
+            )}
+        </div>
 
-                      <button 
-                        onClick={toggleCamera}
-                        disabled={isInitializing}
-                        className="w-16 h-16 rounded-full bg-white text-indigo-600 shadow-xl flex items-center justify-center active:scale-90 transition-all disabled:opacity-50"
-                      >
-                        <div style={{ transform: `rotate(${flipRotation}deg)` }} className="transition-transform duration-500 ease-in-out">
-                            <ArrowPathIcon className="w-7 h-7" />
+        {/* --- TOP HUD (STATUS & SESSION) --- */}
+        <div className="absolute top-16 inset-x-6 z-50 flex items-start justify-between pointer-events-none">
+            <button 
+                onClick={onBack} 
+                className="p-4 rounded-2xl bg-black/50 backdrop-blur-xl border border-white/10 text-white active:scale-90 pointer-events-auto shadow-2xl"
+            >
+                <ArrowLeftIcon className="w-5 h-5" />
+            </button>
+            
+            <div className="flex flex-col items-end gap-2">
+                <div className="bg-black/60 backdrop-blur-xl border border-white/10 px-5 py-2.5 rounded-2xl flex flex-col items-end shadow-2xl">
+                    <span className={`text-[9px] font-black uppercase tracking-[0.2em] mb-0.5 ${session === 'Luar Sesi' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        {session === 'Luar Sesi' ? 'Sesi Tutup' : `Sesi: ${session.toUpperCase()}`}
+                    </span>
+                    <span className="text-xs font-mono font-black text-white opacity-80">
+                        {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        {/* --- BOTTOM ACTIVITY REEL & CONTROLS --- */}
+        <div className="absolute bottom-10 inset-x-0 z-50 flex flex-col items-center gap-6">
+            
+            {/* History Feed - Floating over camera */}
+            <div className="w-full max-w-xs space-y-1.5 px-6 pointer-events-none">
+                {scanHistory.slice(0, 2).map((h, i) => (
+                    <div key={i} className="flex items-center gap-3 bg-black/50 backdrop-blur-lg px-4 py-2.5 rounded-2xl border border-white/5 animate-in slide-in-from-bottom-2" style={{ opacity: 1 - (i * 0.4) }}>
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black ${h.type === 'haid' ? 'bg-pink-500/20 text-pink-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                            {h.name.charAt(0)}
                         </div>
-                      </button>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[9px] font-black text-white/90 uppercase truncate">{h.name}</p>
+                            <p className="text-[7px] font-bold text-white/30 uppercase tracking-tighter">{h.status}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
 
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white/5 text-white/40">
-                         <CameraIcon className={`w-5 h-5 transition-colors ${facingMode === 'environment' ? 'text-indigo-400/60' : 'text-emerald-400/60'}`} />
-                      </div>
-                  </div>
-              </div>
+            <div className="flex items-center gap-8 pointer-events-auto">
+                <button 
+                    onClick={() => setFacingMode(facingMode === 'environment' ? 'user' : 'environment')}
+                    className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white active:scale-75 transition-all shadow-xl"
+                >
+                    <ArrowPathIcon className="w-6 h-6" />
+                </button>
+                
+                <button 
+                    onClick={() => {
+                        const next = !isHaidMode;
+                        setIsHaidMode(next);
+                        toast.info(`Mode Ibadah (Haid) ${next ? 'AKTIF' : 'NONAKTIF'}`);
+                    }}
+                    className={`w-18 h-18 rounded-full flex flex-col items-center justify-center transition-all active:scale-90 border-2 shadow-2xl ${isHaidMode ? 'bg-pink-600 border-pink-400 text-white animate-pulse' : 'bg-white/10 backdrop-blur-xl border-white/10 text-white'}`}
+                >
+                    <HeartIcon className={`w-7 h-7 ${isHaidMode ? 'fill-current' : ''}`} />
+                </button>
 
-              {cameraError && (
-                  <div className="absolute inset-0 bg-slate-950/98 backdrop-blur-3xl z-[100] flex flex-col items-center justify-center p-10 text-center">
-                      <div className="w-20 h-20 bg-rose-500/10 rounded-[2.5rem] flex items-center justify-center mb-6 border border-rose-500/20">
-                        <XCircleIcon className="w-10 h-10 text-rose-500" />
-                      </div>
-                      <h3 className="text-white text-lg font-black uppercase mb-2">Akses Terputus</h3>
-                      <p className="text-slate-500 text-xs mb-8 max-w-xs leading-relaxed">Izin kamera diperlukan untuk sistem presensi digital.</p>
-                      <button onClick={() => startScanner()} className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all flex items-center gap-2 shadow-xl">
-                        <ArrowPathIcon className="w-4 h-4" /> Reset Lensa
-                      </button>
-                  </div>
-              )}
-          </div>
-      </div>
-    </Layout>
+                {hasTorch && (
+                    <button 
+                        onClick={toggleTorch}
+                        className={`w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-75 shadow-xl border ${isTorchOn ? 'bg-yellow-400 border-yellow-300 text-black shadow-[0_0_20px_rgba(250,204,21,0.4)]' : 'bg-white/10 backdrop-blur-xl border-white/10 text-white'}`}
+                    >
+                        <SunIcon className="w-6 h-6" />
+                    </button>
+                )}
+            </div>
+        </div>
+
+        {/* INITIALIZING SCREEN */}
+        {isInitializing && (
+            <div className="absolute inset-0 z-[200] bg-black flex flex-col items-center justify-center gap-6">
+                <Loader2 className="w-12 h-12 text-indigo-500 animate-spin opacity-40" />
+                <p className="text-[10px] font-black text-indigo-500/60 uppercase tracking-[0.5em] animate-pulse">Initializing Lense v6.2</p>
+            </div>
+        )}
+    </div>
   );
 };
 

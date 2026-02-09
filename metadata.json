@@ -1,7 +1,8 @@
 {
   "name": "IMAM V6.1",
-  "description": "School Management System for MAN 1 Hulu Sungai Tengah",
+  "description": "Integrated Madrasah Academic Manager - Smart Presence Edition",
   "requestFramePermissions": [
-    "camera"
+    "camera",
+    "microphone"
   ]
 }

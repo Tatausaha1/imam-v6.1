@@ -27,36 +27,20 @@ const Layout: React.FC<LayoutProps> = ({
   withBottomNav = false,
   customHeader
 }) => {
-  const mobileBgImage = "https://lh3.googleusercontent.com/d/1o8KomVWrJbSQi4m3JdJO1WbbeZHWyrrW";
-
   return (
     <div className={`flex flex-col h-full w-full bg-[#f8fafc] dark:bg-[#020617] transition-colors relative overflow-hidden ${className}`}>
       
-      {/* --- BACKGROUND IMAGE UNTUK MOBILE (GLOBAL) --- */}
-      <div className="absolute inset-0 lg:hidden z-0 pointer-events-none">
-          <img 
-            src={mobileBgImage} 
-            className="w-full h-full object-cover opacity-100" 
-            alt="" 
-          />
-          {/* Overlay transparan 30% agar background terlihat namun konten tetap terbaca */}
-          <div className="absolute inset-0 bg-white/30 dark:bg-black/30 backdrop-blur-[1px]"></div>
-          {/* Gradasi halus untuk header agar teks judul tetap kontras */}
-          <div className="absolute inset-0 bg-gradient-to-b from-white/40 dark:from-black/40 via-transparent to-transparent h-32"></div>
-      </div>
-
-      {/* --- HEADER (COMPACT & FULL FRAME) --- */}
-      <header className="shrink-0 z-30 sticky top-0 safe-pt">
-        <div className="absolute inset-0 bg-white/70 dark:bg-[#0B1121]/70 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800 shadow-sm transition-colors"></div>
-        <div className="relative z-10 flex items-center justify-between p-3 lg:px-6 lg:py-4 gap-2 max-w-screen-2xl mx-auto w-full">
+      {/* --- HEADER (SOLID COLOR - HIGH PERFORMANCE) --- */}
+      <header className="shrink-0 z-30 sticky top-0 safe-pt bg-white dark:bg-[#0B1121] border-b border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
+        <div className="relative z-10 flex items-center justify-between px-4 py-3 md:px-8 md:py-4 gap-4 max-w-7xl mx-auto w-full">
           
-          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
             {onBack && (
               <button 
                 onClick={onBack} 
-                className="p-1.5 rounded-lg bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition-all border border-slate-200/50 dark:border-slate-700/50 shadow-sm"
+                className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 transition-all border border-slate-200 dark:border-slate-700 active:scale-95"
               >
-                <ArrowLeftIcon className="w-4 h-4" />
+                <ArrowLeftIcon className="w-5 h-5" />
               </button>
             )}
             
@@ -64,12 +48,12 @@ const Layout: React.FC<LayoutProps> = ({
               customHeader
             ) : (
               <div className="flex flex-col min-w-0">
-                <h1 className="text-sm font-black text-slate-900 dark:text-white truncate flex items-center gap-1.5 transition-colors">
+                <h1 className="text-sm md:text-base font-black text-slate-900 dark:text-white truncate flex items-center gap-2 transition-colors uppercase tracking-tight">
                   {title}
-                  {Icon && <div className="p-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30"><Icon className="w-3 h-3 text-indigo-600 dark:text-indigo-400" /></div>}
+                  {Icon && <div className="p-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 shrink-0"><Icon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /></div>}
                 </h1>
                 {subtitle && (
-                  <p className="text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate transition-colors">
+                  <p className="text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] truncate transition-colors mt-0.5">
                     {subtitle}
                   </p>
                 )}
@@ -78,24 +62,24 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
 
           {actions && (
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               {actions}
             </div>
           )}
         </div>
       </header>
 
-      {/* --- MAIN ARCHITECTURE (Z-INDEX DIATAS BACKGROUND) --- */}
-      <main className={`flex-1 overflow-y-auto relative w-full z-10 ${withBottomNav ? 'pb-24' : 'pb-6'} scroll-smooth custom-scrollbar`}>
-        <div className="max-w-screen-2xl mx-auto w-full h-full">
+      {/* --- MAIN CONTENT --- */}
+      <main className={`flex-1 overflow-y-auto relative w-full z-10 scroll-smooth ${withBottomNav ? 'pb-32' : 'pb-12'}`}>
+        <div className="max-w-7xl mx-auto w-full h-full px-4 md:px-8 py-5">
             {children}
         </div>
       </main>
 
-      {/* --- FOOTER (SLIM) --- */}
+      {/* --- FOOTER (SOLID) --- */}
       {footer && (
-        <footer className="shrink-0 z-30 bg-white/70 dark:bg-[#0B1121]/70 backdrop-blur-lg border-t border-slate-200/50 dark:border-slate-800 p-3 lg:px-6 pb-4 safe-pb transition-colors">
-          <div className="max-w-screen-2xl mx-auto w-full">
+        <footer className="shrink-0 z-30 bg-white dark:bg-[#0B1121] border-t border-slate-200 dark:border-slate-800 p-4 md:px-8 pb-6 safe-pb transition-colors">
+          <div className="max-w-7xl mx-auto w-full">
             {footer}
           </div>
         </footer>

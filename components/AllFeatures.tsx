@@ -13,19 +13,18 @@ import {
   InfoIcon, AcademicCapIcon, ClipboardDocumentListIcon,
   CommandLineIcon, CameraIcon, Squares2x2Icon, 
   SparklesIcon, MegaphoneIcon, UserIcon, PusakaIcon, RdmIcon, Emis40Icon, EmisIcon,
-  SimsdmIcon, AbsensiKemenagIcon, PintarIcon, AsnDigitalIcon, SimsdmIcon as MutationIcon, IdentificationIcon, ShieldCheckIcon, ClockIcon,
-  StarIcon, CogIcon, ChartBarIcon,
-  // Add missing HeadsetIcon import
-  HeadsetIcon
+  SimsdmIcon, AbsensiKemenagIcon, PintarIcon, AsnDigitalIcon, IdentificationIcon, ShieldCheckIcon, ClockIcon,
+  StarIcon, CogIcon, ChartBarIcon, HeadsetIcon, LogOutIcon
 } from './Icons';
 
 interface AllFeaturesProps {
     onBack: () => void;
     onNavigate: (v: ViewState) => void;
     userRole: UserRole;
+    onLogout?: () => void;
 }
 
-const AllFeatures: React.FC<AllFeaturesProps> = ({ onBack, onNavigate, userRole }) => {
+const AllFeatures: React.FC<AllFeaturesProps> = ({ onBack, onNavigate, userRole, onLogout }) => {
   const menuItems = [
     // --- PORTAL & INFO ---
     { label: 'Berita', icon: MegaphoneIcon, view: ViewState.NEWS, section: 'Portal & Informasi', color: 'text-indigo-600', bg: 'bg-white dark:bg-slate-800' },
@@ -99,6 +98,33 @@ const AllFeatures: React.FC<AllFeaturesProps> = ({ onBack, onNavigate, userRole 
                 </div>
             </div>
         ))}
+
+        {/* SECTION KHUSUS LOGOUT DI MOBILE MENU */}
+        {onLogout && (
+          <div className="space-y-4 pt-6 border-t border-slate-100 dark:border-slate-800 animate-in fade-in">
+             <div className="flex items-center gap-2 pl-1">
+                <div className="h-3 w-1 bg-rose-500 rounded-full"></div>
+                <h3 className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-[0.25em]">Akun & Keamanan</h3>
+             </div>
+             <button 
+                onClick={() => { if(window.confirm("Keluar dari aplikasi IMAM?")) onLogout(); }}
+                className="w-full flex items-center justify-between p-5 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-[2rem] active:scale-[0.98] transition-all group"
+             >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-white dark:bg-rose-900/40 flex items-center justify-center text-rose-600 shadow-sm border border-rose-100 dark:border-rose-800">
+                    <LogOutIcon className="w-6 h-6" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[11px] font-black text-rose-700 dark:text-rose-400 uppercase tracking-tight leading-none">Keluar dari Sesi</p>
+                    <p className="text-[8px] font-bold text-rose-500/60 uppercase mt-1">Selesaikan aktivitas Anda</p>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-white/50 dark:bg-rose-900/20 flex items-center justify-center">
+                    <LogOutIcon className="w-4 h-4 text-rose-400" />
+                </div>
+             </button>
+          </div>
+        )}
       </div>
     </Layout>
   );

@@ -92,7 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
   }, [userRole]);
 
   return (
-    <div className="h-full w-full bg-white dark:bg-[#0B1121] flex flex-col relative overflow-hidden">
+    <div className="h-full w-full bg-white dark:bg-[#0B1121] flex flex-col relative overflow-hidden transition-colors">
       <div className="p-5 pt-8 pb-5 flex items-center justify-between shrink-0 border-b border-slate-50 dark:border-slate-800/50">
         <div className="flex items-center gap-3">
             <div className="w-12 h-12 shrink-0 flex items-center justify-center">
@@ -100,11 +100,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
             </div>
             <div>
                 <h1 className="font-black text-slate-900 dark:text-white text-lg leading-none tracking-tight">IMAM</h1>
-                <p className="text-[7px] font-black text-slate-400 uppercase tracking-[0.25em] mt-1.5">Enterprise v6.1</p>
+                <p className="text-[7px] font-black text-slate-400 uppercase tracking-[0.25em] mt-1.5">Enterprise v6.2</p>
             </div>
         </div>
         {onClose && (
-            <button onClick={onClose} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 border border-slate-100 dark:border-slate-700 active:scale-90 transition-all">
+            <button onClick={onClose} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 border border-slate-100 dark:border-slate-700 active:scale-90 transition-all lg:hidden">
                 <XMarkIcon className="w-5 h-5" />
             </button>
         )}
@@ -125,13 +125,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
                             }
                             if (onClose) onClose(); 
                         }}
-                        className={`w-full flex items-center gap-3 px-4 py-2 rounded-[1.1rem] transition-all duration-300 group ${
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-[1.1rem] transition-all duration-300 group ${
                             !item.url && currentView === item.view
                             ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/20 translate-x-1'
                             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600 dark:hover:text-indigo-400'
                         }`}
                     >
-                        <item.icon className={`w-3.5 h-3.5 shrink-0 transition-all duration-300 ${!item.url && currentView === item.view ? 'text-white scale-110' : 'text-slate-400 dark:text-slate-500 group-hover:scale-110'}`} />
+                        <item.icon className={`w-4 h-4 shrink-0 transition-all duration-300 ${!item.url && currentView === item.view ? 'text-white scale-110' : 'text-slate-400 dark:text-slate-500 group-hover:scale-110'}`} />
                         <span className={`text-[10px] font-bold text-left tracking-wider flex-1 truncate ${!item.url && currentView === item.view ? 'opacity-100' : 'opacity-80'}`}>{item.label}</span>
                         {!item.url && currentView === item.view && (
                           <div className="w-1 h-1 rounded-full bg-white/50 animate-pulse"></div>
@@ -142,27 +142,32 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
         ))}
       </div>
 
-      <div className="p-3 border-t border-slate-50 dark:border-slate-800 mt-auto bg-slate-50/50 dark:bg-slate-900/50">
+      {/* --- FOOTER SECTION: PROFILE & LOGOUT --- */}
+      <div className="p-4 border-t border-slate-50 dark:border-slate-800 mt-auto bg-slate-50/50 dark:bg-slate-900/50 flex flex-col gap-2">
         <div 
             className="flex items-center gap-3 px-4 py-3 rounded-[1.5rem] bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm cursor-pointer group hover:border-indigo-200 transition-all" 
-            onClick={() => onNavigate(ViewState.PROFILE)}
+            onClick={() => { onNavigate(ViewState.PROFILE); if (onClose) onClose(); }}
         >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] text-white shadow-md bg-gradient-to-br from-indigo-500 to-indigo-700 transform group-hover:scale-110 transition-transform`}>
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-[10px] text-white shadow-md bg-gradient-to-br from-indigo-500 to-indigo-700 transform group-hover:rotate-6 transition-transform shrink-0`}>
                 {(userRole || 'G').charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black text-slate-800 dark:text-white truncate uppercase tracking-tight">Profil</p>
-                <p className="text-[7px] text-slate-400 font-bold uppercase tracking-widest truncate">{userRole}</p>
+                <p className="text-[10px] font-black text-slate-800 dark:text-white truncate uppercase tracking-tight leading-none mb-1">Profil Saya</p>
+                <p className="text-[7px] text-slate-400 font-bold uppercase tracking-widest truncate leading-none">{userRole}</p>
             </div>
-            {onLogout && (
-                <button 
-                    onClick={(e) => { e.stopPropagation(); if(window.confirm("Keluar dari aplikasi?")) onLogout(); }} 
-                    className="p-2 text-slate-300 hover:text-rose-500 transition-all"
-                >
-                    <LogOutIcon className="w-4 h-4" />
-                </button>
-            )}
         </div>
+
+        {onLogout && (
+            <button 
+                onClick={() => { 
+                    if(window.confirm("Keluar dari aplikasi IMAM?")) onLogout(); 
+                }} 
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-[1.2rem] bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 font-black text-[9px] uppercase tracking-[0.15em] hover:bg-rose-100 dark:hover:bg-rose-900/40 active:scale-[0.98] transition-all border border-rose-100 dark:border-rose-900/30"
+            >
+                <LogOutIcon className="w-4 h-4 shrink-0" />
+                <span>Keluar Akun</span>
+            </button>
+        )}
       </div>
     </div>
   );

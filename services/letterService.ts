@@ -2,7 +2,7 @@
 import { db, isMockMode, auth } from './firebase';
 import { LetterRequest, LetterStatus, UserRole } from '../types';
 
-const COLLECTION_NAME = 'surat';
+const COLLECTION_NAME = 'letters';
 
 export const getLetters = async (isAdmin: boolean): Promise<LetterRequest[]> => {
     if (isMockMode) return [];

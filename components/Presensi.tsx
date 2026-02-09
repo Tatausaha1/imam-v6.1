@@ -8,12 +8,17 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db, isMockMode } from '../services/firebase';
 import { Student, ViewState, AttendanceRecord } from '../types';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+// Fix: Using subpath import for format to resolve module export error
+import format from 'date-fns/format';
 import { id as localeID } from 'date-fns/locale/id'; 
+import { jsPDF } from "jspdf";
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import { 
     Loader2, ChevronLeft, ChevronRight, 
     Search, CameraIcon, PencilIcon, 
-    CalendarIcon, UsersIcon, ChevronDownIcon, XCircleIcon
+    CalendarIcon, UsersIcon, ChevronDownIcon, XCircleIcon,
+    FileText, FileSpreadsheet, ArrowDownTrayIcon
 } from './Icons';
 import Layout from './Layout';
 
@@ -26,6 +31,7 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
   const [attendanceSnapshot, setAttendanceSnapshot] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterNama, setFilterNama] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -39,8 +45,23 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
         return; 
     }
     if (!db) return;
-    const unsubS = db.collection("students").where("status", "==", "Aktif").onSnapshot(s => setAllStudents(s.docs.map(d => ({ id: d.id, ...d.data() } as Student))));
-    const unsubA = db.collection("attendance").where("date", "==", dateStr).onSnapshot(s => { setAttendanceSnapshot(s.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord))); setLoading(false); });
+
+    const unsubS = db.collection("students").where("status", "==", "Aktif").onSnapshot(
+        s => setAllStudents(s.docs.map(d => ({ id: d.id, ...d.data() } as Student))),
+        err => console.warn("Firestore Error:", err.message)
+    );
+
+    const unsubA = db.collection("attendance").where("date", "==", dateStr).onSnapshot(
+        s => { 
+            setAttendanceSnapshot(s.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord))); 
+            setLoading(false); 
+        },
+        err => {
+            console.warn("Firestore Error:", err.message);
+            setLoading(false);
+        }
+    );
+
     return () => { unsubS(); unsubA(); };
   }, [date]);
 
@@ -57,8 +78,82 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
     });
   }, [allStudents, attendanceSnapshot, date, filterNama]);
 
+  // --- FUNGSI EXPORT PDF ---
+  const handleExportPDF = () => {
+    if (displayData.length === 0) {
+        toast.error("Tidak ada data untuk dicetak.");
+        return;
+    }
+
+    const doc = new jsPDF();
+    const dateStr = format(date, "dd MMMM yyyy", { locale: localeID });
+    
+    doc.setFontSize(18);
+    doc.text("LAPORAN PRESENSI HARIAN SISWA", 105, 15, { align: 'center' });
+    doc.setFontSize(11);
+    doc.text(`MAN 1 HULU SUNGAI TENGAH`, 105, 22, { align: 'center' });
+    doc.text(`Tanggal: ${dateStr}`, 105, 28, { align: 'center' });
+    doc.line(15, 32, 195, 32);
+
+    const tableRows = displayData.map((record, index) => [
+        index + 1,
+        record.studentName.toUpperCase(),
+        record.idUnik || '-',
+        record.class || '-',
+        record.checkIn?.split(' | ')[0] || '-',
+        record.duha?.split(' | ')[0] || '-',
+        record.zuhur?.split(' | ')[0] || '-',
+        record.ashar?.split(' | ')[0] || '-',
+        record.checkOut?.split(' | ')[0] || '-',
+        record.status
+    ]);
+
+    autoTable(doc, {
+        startY: 38,
+        head: [['NO', 'NAMA LENGKAP', 'ID', 'KELAS', 'MSK', 'DHA', 'ZHR', 'ASR', 'PLG', 'KET']],
+        body: tableRows,
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [79, 70, 229], textColor: 255, halign: 'center' },
+        columnStyles: {
+            0: { halign: 'center', cellWidth: 8 },
+            2: { halign: 'center', cellWidth: 15 },
+            4: { halign: 'center' },
+            5: { halign: 'center' },
+            6: { halign: 'center' },
+            7: { halign: 'center' },
+            8: { halign: 'center' },
+            9: { halign: 'center', fontStyle: 'bold' }
+        }
+    });
+
+    doc.save(`Presensi_IMAM_${format(date, "yyyy-MM-dd")}.pdf`);
+    toast.success("Laporan PDF berhasil diunduh.");
+  };
+
+  // --- FUNGSI EXPORT EXCEL ---
+  const handleExportExcel = () => {
+    const dataToExport = displayData.map((r, i) => ({
+        'No': i + 1,
+        'Nama Lengkap': r.studentName,
+        'ID Unik': r.idUnik,
+        'Kelas': r.class,
+        'Jam Masuk': r.checkIn || '-',
+        'Duha': r.duha || '-',
+        'Zuhur': r.zuhur || '-',
+        'Ashar': r.ashar || '-',
+        'Pulang': r.checkOut || '-',
+        'Keterangan': r.status
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Presensi");
+    XLSX.writeFile(workbook, `Laporan_Presensi_${format(date, "yyyy-MM-dd")}.xlsx`);
+    toast.success("File Excel berhasil diunduh.");
+  };
+
   const sessions: SessionFilter[] = ['Masuk', 'Duha', 'Zuhur', 'Ashar', 'Pulang'];
-  const sessionKeyMap: Record<SessionFilter, string> = {
+  const sessionKeyMap: Record<SessionFilter, keyof AttendanceRecord> = {
       'Masuk': 'checkIn', 'Duha': 'duha', 'Zuhur': 'zuhur', 'Ashar': 'ashar', 'Pulang': 'checkOut'
   };
 
@@ -73,10 +168,33 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
   };
 
   return (
-    <Layout title="Presensi Harian" subtitle="Log Database" icon={CameraIcon} onBack={onBack}>
+    <Layout 
+        title="Presensi Harian" 
+        subtitle="Log Database" 
+        icon={CameraIcon} 
+        onBack={onBack}
+        actions={
+            <div className="flex gap-2">
+                <button 
+                    onClick={handleExportExcel}
+                    className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all active:scale-90"
+                    title="Export Excel"
+                >
+                    <FileSpreadsheet className="w-5 h-5" />
+                </button>
+                <button 
+                    onClick={handleExportPDF}
+                    className="p-2.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-600 hover:text-white transition-all active:scale-90"
+                    title="Cetak PDF"
+                >
+                    <FileText className="w-5 h-5" />
+                </button>
+            </div>
+        }
+    >
       <div className="space-y-6 pb-40 animate-in fade-in duration-700">
           
-          {/* --- HEADER UNIFIED CARD (44px Rounded) --- */}
+          {/* --- HEADER UNIFIED CARD --- */}
           <div className="mx-4 md:mx-6 bg-white/40 dark:bg-[#0B1121]/40 backdrop-blur-3xl p-6 rounded-[2.8rem] border border-white/20 dark:border-white/5 shadow-2xl flex flex-col md:flex-row gap-4">
               <div className="flex-1 flex items-center gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] px-6 py-4 shadow-inner">
                   <button onClick={() => setDate(new Date(date.getTime() - 86400000))} className="p-2 hover:bg-indigo-50 rounded-full transition-colors"><ChevronLeft className="w-6 h-6 text-indigo-600" /></button>
@@ -126,14 +244,12 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
                               <th className="w-12 px-6 py-7 text-center">#</th>
                               <th className="px-4 py-7 sticky left-0 bg-slate-50 dark:bg-slate-900 z-30 border-r border-slate-100 dark:border-white/5 min-w-[160px]">Nama Lengkap</th>
                               
-                              {/* Desktop Columns */}
                               <th className="hidden lg:table-cell px-4 py-7 text-center border-r dark:border-white/5">MSK</th>
                               <th className="hidden lg:table-cell px-4 py-7 text-center border-r dark:border-white/5">DHA</th>
                               <th className="hidden lg:table-cell px-4 py-7 text-center border-r dark:border-white/5">ZHR</th>
                               <th className="hidden lg:table-cell px-4 py-7 text-center border-r dark:border-white/5">ASR</th>
                               <th className="hidden lg:table-cell px-4 py-7 text-center border-r dark:border-white/5">PLG</th>
 
-                              {/* Mobile Dinamis */}
                               <th className="lg:hidden px-4 py-7 text-center border-r dark:border-white/5">{selectedSession}</th>
                               
                               <th className="w-32 px-4 py-7 text-center">Status</th>
@@ -143,7 +259,7 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
                           {loading ? (
                               <tr><td colSpan={8} className="py-24 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-indigo-600 opacity-20" /></td></tr>
                           ) : displayData.map((record, idx) => {
-                              const mobileTime = record[sessionKeyMap[selectedSession]];
+                              const mobileTime = (record as any)[sessionKeyMap[selectedSession]];
                               return (
                                   <tr key={record.id} className="text-[11px] hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-colors group font-black uppercase tracking-tight">
                                       <td className="px-6 py-6 text-center text-slate-400 font-bold">{idx + 1}</td>
@@ -151,14 +267,12 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
                                           {record.studentName}
                                       </td>
                                       
-                                      {/* Desktop Cells */}
                                       <td className="hidden lg:table-cell px-4 py-6 text-center border-r dark:border-white/5 font-mono text-slate-300 group-hover:text-indigo-600 transition-colors">{record.checkIn?.substring(0, 5) || '--:--'}</td>
                                       <td className="hidden lg:table-cell px-4 py-6 text-center border-r dark:border-white/5 font-mono text-slate-300 group-hover:text-indigo-600 transition-colors">{record.duha?.substring(0, 5) || '--:--'}</td>
                                       <td className="hidden lg:table-cell px-4 py-6 text-center border-r dark:border-white/5 font-mono text-slate-300 group-hover:text-indigo-600 transition-colors">{record.zuhur?.substring(0, 5) || '--:--'}</td>
                                       <td className="hidden lg:table-cell px-4 py-6 text-center border-r dark:border-white/5 font-mono text-slate-300 group-hover:text-indigo-600 transition-colors">{record.ashar?.substring(0, 5) || '--:--'}</td>
                                       <td className="hidden lg:table-cell px-4 py-6 text-center border-r dark:border-white/5 font-mono text-slate-300 group-hover:text-indigo-600 transition-colors">{record.checkOut?.substring(0, 5) || '--:--'}</td>
 
-                                      {/* Mobile Cell */}
                                       <td className={`lg:hidden px-4 py-6 text-center border-r dark:border-white/5 font-mono ${mobileTime ? 'text-indigo-600' : 'text-slate-200'}`}>
                                           {mobileTime ? mobileTime.substring(0, 5) : '--:--'}
                                       </td>
@@ -168,7 +282,7 @@ const Presensi: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => voi
                                               <span className={`px-4 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest border flex-1 ${getStatusColor(record.status)}`}>
                                                   {record.status}
                                               </span>
-                                              <button className="p-2 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 rounded-xl transition-all active:scale-75 shrink-0 border border-slate-100 dark:border-slate-800"><PencilIcon className="w-3.5 h-3.5" /></button>
+                                              <button className="p-2 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 rounded-xl transition-all active:scale-75 shrink-0 border border-slate-100 dark:border-slate-800"><PencilIcon className="w-5 h-5" /></button>
                                           </div>
                                       </td>
                                   </tr>

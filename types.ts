@@ -44,6 +44,7 @@ export enum ViewState {
   GUIDE = 'GUIDE',
   POINTS = 'POINTS',
   KEMENAG_HUB = 'KEMENAG_HUB',
+  NOTIFICATIONS = 'NOTIFICATIONS',
 }
 
 export enum UserRole {
@@ -56,6 +57,16 @@ export enum UserRole {
   KETUA_KELAS = 'Ketua Kelas',
   SISWA = 'siswa',
   ORANG_TUA = 'orangtua',
+}
+
+export interface AppNotification {
+    id: string;
+    title: string;
+    message: string;
+    date: string;
+    type: 'announcement' | 'update' | 'alert';
+    sender: string;
+    isRead?: boolean;
 }
 
 export interface FAQItemData {
