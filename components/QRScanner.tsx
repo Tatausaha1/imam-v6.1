@@ -42,15 +42,26 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
   const isProcessing = useRef(false);
   const isMounted = useRef(true);
 
+  // OPTIMASI AUDIO: Pre-load audio objects
+  const audioSuccess = useRef<HTMLAudioElement | null>(null);
+  const audioError = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    // Inisialisasi audio hanya sekali di awal
+    audioSuccess.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+    audioError.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3');
+    
+    if (audioSuccess.current) audioSuccess.current.volume = 0.3;
+    if (audioError.current) audioError.current.volume = 0.3;
+  }, []);
+
   const playBeep = (type: 'success' | 'error') => {
-    try {
-      const audio = new Audio(type === 'success' 
-        ? 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'
-        : 'https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3'
-      );
-      audio.volume = 0.3;
-      audio.play();
-    } catch (e) {}
+    const audio = type === 'success' ? audioSuccess.current : audioError.current;
+    if (audio) {
+      // Reset ke awal agar bisa diputar berulang kali dengan cepat (0.5s)
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+    }
   };
 
   const detectSession = useCallback((config: any): AttendanceSession | 'Luar Sesi' => {
@@ -109,7 +120,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
                 setShowFlash(null); 
                 isProcessing.current = false; 
             }
-        }, 500); // Sinkron ke 0.5s
+        }, 500); 
         return;
     }
 
@@ -118,8 +129,8 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
       
       if (result.success) {
           setShowFlash(isHaidMode ? 'haid' : 'success');
-          playBeep('success');
-          if (navigator.vibrate) navigator.vibrate(80); // Vibrasi lebih pendek untuk efisiensi
+          playBeep('success'); // Instant Playback
+          if (navigator.vibrate) navigator.vibrate(80);
 
           const newScan: RecentScan = {
               id: cleanCode,
@@ -135,6 +146,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
           
           if (isAlreadyScanned) {
               setShowFlash('warning');
+              // Sesuai request sebelumnya: Sudah Scan tanpa suara
               const warnScan: RecentScan = {
                   id: cleanCode,
                   name: result.student?.namaLengkap || "Perhatian",
@@ -145,7 +157,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
               setLastScanned(warnScan);
           } else {
               setShowFlash('error');
-              playBeep('error');
+              playBeep('error'); // Instant Playback
               const errScan: RecentScan = {
                   id: cleanCode,
                   name: result.student?.namaLengkap || "Gagal Absensi",
@@ -157,7 +169,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
           }
       }
       
-      // ULTRA SPEED: Reset status processing dalam 0.5 detik
+      // ULTRA SPEED: Reset processing state in 0.5s
       setTimeout(() => { 
         if (isMounted.current) {
           setLastScanned(null); 
@@ -192,8 +204,8 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
       await html5QrCode.start(
         { facingMode: mode }, 
         { 
-            fps: 60, // Naikkan ke 60 FPS jika didukung hardware untuk akurasi instan
-            // HILANGKAN QRBOX: Memungkinkan scan di seluruh area kamera (Full Frame)
+            fps: 60,
+            // NO QRBOX: Full Frame active sensor for maximum speed
             aspectRatio: width / height,
             videoConstraints: { 
                 focusMode: "continuous", 
@@ -272,7 +284,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
         {/* FLASH EFFECT LAYER */}
         <div className={`absolute inset-0 z-[100] pointer-events-none transition-all duration-100 ${getFlashColor()}`}></div>
 
-        {/* --- CAMERA ENGINE (Full Frame Enabled) --- */}
+        {/* --- CAMERA ENGINE --- */}
         <div id="reader-core" className="absolute inset-0 w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:!object-cover opacity-100"></div>
 
         {/* --- DYNAMIC NOTIFICATION --- */}
@@ -370,7 +382,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
         {isInitializing && (
             <div className="absolute inset-0 z-[200] bg-black flex flex-col items-center justify-center gap-6">
                 <Loader2 className="w-12 h-12 text-indigo-500 animate-spin opacity-40" />
-                <p className="text-[10px] font-black text-indigo-500/60 uppercase tracking-[0.5em] animate-pulse">Lense Engine v6.3 Full-Frame</p>
+                <p className="text-[10px] font-black text-indigo-500/60 uppercase tracking-[0.5em] animate-pulse">Lense Engine v6.4 Ultra-Fast</p>
             </div>
         )}
     </div>
