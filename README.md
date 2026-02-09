@@ -1,99 +1,74 @@
 # IMAM - Integrated Madrasah Academic Manager 🏫
-**Version 6.1 - Smart Presence Edition**
+**Version 6.2 - Enterprise Cloud Edition**
 
 **IMAM** adalah ekosistem manajemen madrasah modern yang dirancang untuk **MAN 1 Hulu Sungai Tengah**. Aplikasi ini mengintegrasikan administrasi cerdas, presensi berbasis QR Code tingkat tinggi, dan asisten pendidikan bertenaga AI dalam satu platform *mobile-first*.
 
 ---
 
-## 🚀 Fitur Utama
-- **Ultra-Fast QR Scanner**: Pemindaian full-frame dengan jeda respons 0.5 detik.
-- **AI Academic Assistant**: Integrasi Google Gemini API untuk pembuatan RPP & Kuis otomatis.
-- **Hybrid AI Chat**: Live helpdesk menggunakan GPT-4 & Gemini.
-- **Digital Student ID**: Kartu pelajar interaktif dengan QR Code unik.
-- **PTSP Digital**: Alur surat menyurat dengan Tanda Tangan Digital (QR Seal).
-- **Enterprise Security**: Proteksi database Firestore dengan verifikasi role berjenjang.
+## 📸 Tampilan Antarmuka (Preview)
+*Berikut adalah tampilan aplikasi jika dijalankan di perangkat seluler:*
+
+<div align="center">
+  <table table-layout="fixed" width="100%">
+    <tr>
+      <td width="33%" align="center">
+        <img src="./public/screenshots/dashboard.png" width="250" alt="Dashboard Utama" />
+        <br /><b>Dashboard Utama</b>
+      </td>
+      <td width="33%" align="center">
+        <img src="./public/screenshots/scanner.png" width="250" alt="Lensa Presensi QR" />
+        <br /><b>Ultra-Fast QR Scanner</b>
+      </td>
+      <td width="33%" align="center">
+        <img src="./public/screenshots/idcard.png" width="250" alt="Kartu Pelajar Digital" />
+        <br /><b>Kartu Pelajar Digital</b>
+      </td>
+    </tr>
+  </table>
+</div>
+
+> **💡 Cara Memunculkan Gambar Anda:**
+> 1. Ambil screenshot aplikasi dari HP Anda.
+> 2. Simpan foto ke folder `public/screenshots/` dengan nama `dashboard.png`, `scanner.png`, dan `idcard.png`.
+> 3. Lakukan `git add .`, `git commit`, dan `git push`. Gambar akan otomatis muncul di sini.
 
 ---
 
-## 🛠️ Persiapan Sebelum Hosting
-
-Sebelum melakukan deployment, pastikan Anda telah menyiapkan:
-1. **Google Gemini API Key**: Dapatkan di [Google AI Studio](https://aistudio.google.com/).
-2. **OpenAI API Key** (Opsional): Jika ingin menggunakan fitur GPT-4.
-3. **Firebase Project**: Aktifkan Firestore, Authentication, dan hosting di [Firebase Console](https://console.firebase.google.com/).
-
----
-
-## 🔼 Deployment ke Vercel (Direkomendasikan)
-
-Vercel adalah platform terbaik untuk aplikasi berbasis React/Vite.
-
-### 1. Konfigurasi Project
-Saat melakukan impor repository di Vercel:
-- **Framework Preset**: Pilih `Other` atau `Vite`.
-- **Build Command**: `npm run build`
-- **Output Directory**: `dist`
-
-### 2. Environment Variables
-Masukkan variabel berikut di tab **Settings > Environment Variables**:
-| Key | Value |
-|---|---|
-| `GEMINI_API_KEY` | `AIzaSy... (Key Anda)` |
-| `OPENAI_API_KEY` | `sk-proj... (Key Anda)` |
-
-### 3. Authorized Domains
-Salin URL dari Vercel (misal: `imam-v6.vercel.app`) dan tambahkan ke:
-- **Firebase Console > Auth > Settings > Authorized Domains**.
+## 🚀 Fitur Unggulan
+- **⚡ Smart QR Presence**: Pemindaian full-frame dengan jeda respons hanya 0.5 detik. Mendukung mode Haid dan pencatatan sholat berjamaah.
+- **🤖 AI Academic Assistant**: Integrasi Google Gemini 3 Flash untuk pembuatan RPP, draf kuis, dan pengumuman otomatis.
+- **💬 Hybrid AI Helpdesk**: Layanan chat bantuan teknis yang menggabungkan kecerdasan GPT-4 dan Gemini.
+- **🪪 Digital Identification**: Kartu identitas siswa cerdas yang terhubung langsung dengan database cloud.
+- **✉️ Digital PTSP**: Alur surat menyurat mandiri dengan verifikasi berjenjang dan tanda tangan digital (QR Seal).
+- **🛡️ Enterprise Grade Security**: Proteksi database Firestore dengan aturan keamanan tingkat tinggi berbasis peran (role).
 
 ---
 
-## 🔼 Deployment ke Netlify
-
-### 1. Konfigurasi Build
-- **Build Command**: `npm run build`
-- **Publish Directory**: `dist`
-
-### 2. Penanganan Routing (Penting!)
-Karena ini adalah Single Page Application (SPA), Anda perlu membuat file bernama `_redirects` di dalam folder `public` sebelum build, atau tambahkan di root setelah build:
-```text
-/*   /index.html   200
-```
-
-### 3. Environment Variables
-Masukkan API Key di **Site settings > Environment variables**.
+## 🛠️ Persiapan Teknis
+Sebelum melakukan deployment, pastikan variabel berikut sudah dikonfigurasi:
+- **Google Gemini API Key**: Untuk otak AI Generator.
+- **OpenAI API Key**: Untuk fitur Live Chat GPT-4.
+- **Firebase Project**: Firestore, Auth, dan Hosting diaktifkan.
 
 ---
 
-## 💻 Pengembangan Lokal
-
-```bash
-# Clone repository
-git clone [url-repo]
-
-# Install dependensi
-npm install
-
-# Jalankan server pengembangan
-npm run dev
-```
-
-Pastikan Anda memiliki file `.env` di root folder:
-```env
-GEMINI_API_KEY=YOUR_KEY_HERE
-OPENAI_API_KEY=YOUR_KEY_HERE
-```
+## 🔼 Deployment ke Vercel (Gratis)
+Aplikasi ini dioptimasi untuk berjalan di paket **Vercel Hobby (Gratis)**.
+1. Hubungkan repository GitHub ini ke Vercel.
+2. Masukkan `GEMINI_API_KEY` dan `OPENAI_API_KEY` di tab Environment Variables.
+3. Klik **Deploy**.
 
 ---
 
-## 📊 Spesifikasi Teknis
+## 📊 Spesifikasi Sistem
 - **Frontend**: React 19, Tailwind CSS, Vite 6.
-- **Database**: Google Firebase Firestore (Realtime Sync).
-- **AI Engine**: Google Gemini 3 Flash & OpenAI GPT-4.
-- **Scanner**: HTML5-QRCode (Zero-latency optimized).
+- **Database**: Google Firebase (Realtime Persistence).
+- **AI Core**: Gemini 3 Flash & OpenAI GPT-4 Turbo.
+- **Tools**: jsPDF, XLSX, Html5-QRCode.
 
 ---
 
-## 📝 Kontributor & Lisensi
+## 📝 Kontributor
 - **Lead Developer**: Akhmad Arifin (NIP: 19901004 202521 1012)
 - **Instansi**: MAN 1 Hulu Sungai Tengah
 - **Peran**: Penata Layanan Operasional / Fullstack Engineer

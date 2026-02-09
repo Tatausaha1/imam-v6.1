@@ -1,4 +1,3 @@
-
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -7,7 +6,7 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { ViewState, UserRole } from '../types';
 import { toast } from 'sonner';
-import { Loader2, AppLogo } from './Icons';
+import { Loader2, AppLogo, ShieldCheckIcon } from './Icons';
 import { auth, db, isMockMode } from '../services/firebase';
 
 // Komponen Inti
@@ -26,7 +25,6 @@ const Reports = lazy(() => import('./Reports'));
 const Advisor = lazy(() => import('./Advisor'));
 const Settings = lazy(() => import('./Settings'));
 const AllFeatures = lazy(() => import('./AllFeatures'));
-const AttendanceHistory = lazy(() => import('./AttendanceHistory'));
 const QRScanner = lazy(() => import('./QRScanner'));
 const TeachingJournal = lazy(() => import('./TeachingJournal'));
 const Assignments = lazy(() => import('./Assignments'));
@@ -68,7 +66,18 @@ const App: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [viewKey, setViewKey] = useState(0); 
 
+  // --- ROLE DEFINITIONS ---
+  const ROLE_GROUPS = {
+    STAFF_ABOVE: [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.GURU, UserRole.STAF, UserRole.WALI_KELAS, UserRole.KEPALA_MADRASAH],
+    ADMIN_DEV: [UserRole.ADMIN, UserRole.DEVELOPER],
+    AUTHENTICATED: [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.GURU, UserRole.STAF, UserRole.WALI_KELAS, UserRole.KEPALA_MADRASAH, UserRole.SISWA, UserRole.ORANG_TUA, UserRole.KETUA_KELAS]
+  };
+
   useEffect(() => {
+    if (isMockMode) {
+        console.warn("%c⚠️ MOCK MODE ACTIVE: Database is simulated. Disable in firebase.ts for production.", "color: orange; font-weight: bold; font-size: 14px;");
+    }
+
     if (isMockMode || !db || currentView === ViewState.LOGIN || authLoading || !auth?.currentUser) return;
 
     try {
@@ -80,21 +89,16 @@ const App: React.FC = () => {
                         const data = change.doc.data();
                         toast.success(data.title || "Pemberitahuan Baru", {
                             description: data.message,
-                            action: {
-                                label: "LIHAT",
-                                onClick: () => handleNavigate(ViewState.NOTIFICATIONS)
-                            },
+                            action: { label: "LIHAT", onClick: () => handleNavigate(ViewState.NOTIFICATIONS) },
                             duration: 10000
                         });
                     }
                 });
-            }, err => {
-                console.warn("Announcement stream temporarily unavailable:", err.message);
-            });
+            }, err => console.warn("Announcement stream delay:", err.message));
 
         return () => unsub();
     } catch (e) {
-        console.error("Critical: Failed to setup global notification listener:", e);
+        console.error("Notification listener failed:", e);
     }
   }, [currentView, authLoading]); 
 
@@ -113,45 +117,42 @@ const App: React.FC = () => {
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
 
-      if (isMockMode) {
-          setAuthLoading(false); 
-      } else if (auth) {
-          const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
-              if (user && db) {
-                  try {
-                      const userRef = db.collection('users').doc(user.uid);
-                      const userDoc = await userRef.get();
-                      
-                      if (userDoc.exists) {
-                          const data = userDoc.data();
-                          const role = data?.role as UserRole || UserRole.GURU;
-                          setUserRole(role);
-                          if (currentView === ViewState.LOGIN) {
-                              setCurrentView(ViewState.DASHBOARD);
-                          }
-                      }
-                  } catch (e: any) { 
-                      console.warn("Auth database sync delay:", e.message);
-                  }
-              }
+      // Unified Auth Strategy
+      const initAuth = async () => {
+          if (isMockMode) {
               setAuthLoading(false);
-          });
-          return () => unsubscribeAuth();
-      } else {
-          setAuthLoading(false);
-      }
+          } else if (auth) {
+              const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
+                  if (user && db) {
+                      try {
+                          const userDoc = await db.collection('users').doc(user.uid).get();
+                          if (userDoc.exists) {
+                              const role = userDoc.data()?.role as UserRole || UserRole.GURU;
+                              setUserRole(role);
+                              if (currentView === ViewState.LOGIN) setCurrentView(ViewState.DASHBOARD);
+                          }
+                      } catch (e: any) { console.warn("Sync delay:", e.message); }
+                  }
+                  setAuthLoading(false);
+              });
+              return unsubscribeAuth;
+          } else {
+              setAuthLoading(false);
+          }
+      };
+      
+      const authUnsubPromise = initAuth();
 
       return () => {
           window.removeEventListener('online', handleOnline);
           window.removeEventListener('offline', handleOffline);
+          authUnsubPromise.then(unsub => unsub && unsub());
       };
   }, []);
 
   const handleNavigate = (view: ViewState) => {
     if (view === currentView) return;
-    if (currentView !== ViewState.LOGIN) {
-        setNavigationHistory(prev => [...prev, currentView]);
-    }
+    if (currentView !== ViewState.LOGIN) setNavigationHistory(prev => [...prev, currentView]);
     setViewKey(prev => prev + 1);
     setCurrentView(view);
   };
@@ -163,12 +164,10 @@ const App: React.FC = () => {
           setNavigationHistory(historyCopy);
           setViewKey(prev => prev + 1);
           setCurrentView(previousView);
-      } else {
-          if (currentView !== ViewState.DASHBOARD) {
-              setCurrentView(ViewState.DASHBOARD);
-              setNavigationHistory([]);
-              setViewKey(prev => prev + 1);
-          }
+      } else if (currentView !== ViewState.DASHBOARD) {
+          setCurrentView(ViewState.DASHBOARD);
+          setNavigationHistory([]);
+          setViewKey(prev => prev + 1);
       }
   };
 
@@ -195,54 +194,68 @@ const App: React.FC = () => {
     setCurrentView(ViewState.LOGIN);
   };
 
-  const staffAbove = [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.GURU, UserRole.STAF, UserRole.WALI_KELAS, UserRole.KEPALA_MADRASAH];
-  const adminDevOnly = [UserRole.ADMIN, UserRole.DEVELOPER];
-  const allAuthenticated = [...staffAbove, UserRole.SISWA, UserRole.ORANG_TUA, UserRole.KETUA_KELAS];
-
+  /**
+   * OPTIMIZED VIEW RENDERER
+   * Using a mapping strategy to keep App.tsx clean and maintainable.
+   */
   const renderViewContent = () => {
-    switch (currentView) {
-      case ViewState.LOGIN: return <Login onLogin={handleLoginSuccess} />;
-      case ViewState.DASHBOARD: return <Dashboard onNavigate={handleNavigate} isDarkMode={isDarkTheme} onToggleTheme={toggleTheme} userRole={userRole} onLogout={handleLogout} />;
-      case ViewState.PROFILE: return <Profile onBack={handleBack} onLogout={handleLogout} />;
-      case ViewState.SCHEDULE: return <Schedule onBack={handleBack} />;
-      case ViewState.ALL_FEATURES: return <AllFeatures onBack={handleBack} onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />;
-      case ViewState.NEWS: return <News onBack={handleBack} />;
-      case ViewState.ABOUT: return <About onBack={handleBack} />;
-      case ViewState.LOGIN_HISTORY: return <LoginHistory onBack={handleBack} />;
-      case ViewState.ID_CARD: return <IDCard onBack={handleBack} />;
-      case ViewState.HISTORY: return <History onBack={handleBack} onNavigate={handleNavigate} userRole={userRole} />;
-      case ViewState.PREMIUM: return <Premium onBack={handleBack} />;
-      case ViewState.ADVISOR: return <Advisor onBack={handleBack} />;
-      case ViewState.MADRASAH_INFO: return <MadrasahInfo onBack={handleBack} />;
-      case ViewState.KEMENAG_HUB: return <KemenagHub onBack={handleBack} />;
-      case ViewState.NOTIFICATIONS: return <NotificationCenter onBack={handleBack} />;
-      case ViewState.CLASSES: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={handleBack}><ClassList onBack={handleBack} onNavigate={handleNavigate} userRole={userRole} /></ProtectedRoute>;
-      case ViewState.PRESENSI: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={handleBack}><Presensi onBack={handleBack} onNavigate={handleNavigate} /></ProtectedRoute>;
-      case ViewState.SCANNER: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={handleBack}><QRScanner onBack={handleBack} /></ProtectedRoute>;
-      case ViewState.REPORTS: return <ProtectedRoute allowedRoles={allAuthenticated} userRole={userRole} onBack={handleBack}><Reports onBack={handleBack} onNavigate={handleNavigate} userRole={userRole} /></ProtectedRoute>;
-      case ViewState.JOURNAL: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={handleBack}><TeachingJournal onBack={handleBack} /></ProtectedRoute>;
-      case ViewState.ASSIGNMENTS: return <Assignments onBack={handleBack} userRole={userRole} />;
-      case ViewState.GRADES:
-      case ViewState.REPORT_CARDS: return <Grades onBack={handleBack} userRole={userRole} />;
-      case ViewState.STUDENTS: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={handleBack}><StudentData onBack={handleBack} userRole={userRole} /></ProtectedRoute>;
-      case ViewState.ALUMNI: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={handleBack}><AlumniData onBack={handleBack} userRole={userRole} /></ProtectedRoute>;
-      case ViewState.MUTATION: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={handleBack}><MutationData onBack={handleBack} userRole={userRole} /></ProtectedRoute>;
-      case ViewState.TEACHERS: return <ProtectedRoute allowedRoles={staffAbove} userRole={userRole} onBack={handleBack}><TeacherData onBack={handleBack} userRole={userRole} /></ProtectedRoute>;
-      case ViewState.LETTERS: return <Letters onBack={handleBack} userRole={userRole} />;
-      case ViewState.POINTS: return <PointsView onBack={handleBack} />;
-      case ViewState.ACADEMIC_YEAR: return <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={handleBack}><AcademicYear onBack={handleBack} /></ProtectedRoute>;
-      case ViewState.PROMOTION: return <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={handleBack}><ClassPromotion onBack={handleBack} /></ProtectedRoute>;
-      case ViewState.PUSAKA: return <GenericView title="Pusaka Kemenag" onBack={handleBack} description="Integrasi resmi dengan Pusaka Super Apps RI." />;
-      case ViewState.CREATE_ACCOUNT: 
+    const commonProps = { onBack: handleBack, onNavigate: handleNavigate, userRole, onLogout: handleLogout };
+    
+    // Mapping for simple views
+    const viewMap: Partial<Record<ViewState, React.ReactNode>> = {
+        [ViewState.LOGIN]: <Login onLogin={handleLoginSuccess} />,
+        [ViewState.DASHBOARD]: <Dashboard {...commonProps} isDarkMode={isDarkTheme} onToggleTheme={toggleTheme} />,
+        [ViewState.PROFILE]: <Profile onBack={handleBack} onLogout={handleLogout} />,
+        [ViewState.SCHEDULE]: <Schedule onBack={handleBack} />,
+        [ViewState.ALL_FEATURES]: <AllFeatures {...commonProps} />,
+        [ViewState.NEWS]: <News onBack={handleBack} />,
+        [ViewState.ABOUT]: <About onBack={handleBack} />,
+        [ViewState.LOGIN_HISTORY]: <LoginHistory onBack={handleBack} />,
+        [ViewState.ID_CARD]: <IDCard onBack={handleBack} />,
+        [ViewState.HISTORY]: <History {...commonProps} />,
+        [ViewState.PREMIUM]: <Premium onBack={handleBack} />,
+        [ViewState.ADVISOR]: <Advisor onBack={handleBack} />,
+        [ViewState.MADRASAH_INFO]: <MadrasahInfo onBack={handleBack} />,
+        [ViewState.KEMENAG_HUB]: <KemenagHub onBack={handleBack} />,
+        [ViewState.NOTIFICATIONS]: <NotificationCenter onBack={handleBack} />,
+        [ViewState.ASSIGNMENTS]: <Assignments onBack={handleBack} userRole={userRole} />,
+        [ViewState.GRADES]: <Grades onBack={handleBack} userRole={userRole} />,
+        [ViewState.REPORT_CARDS]: <Grades onBack={handleBack} userRole={userRole} />,
+        [ViewState.LETTERS]: <Letters onBack={handleBack} userRole={userRole} />,
+        [ViewState.POINTS]: <PointsView onBack={handleBack} />,
+        [ViewState.PUSAKA]: <GenericView title="Pusaka Kemenag" onBack={handleBack} description="Integrasi resmi dengan Pusaka Super Apps RI." />,
+        [ViewState.SETTINGS]: <Settings {...commonProps} isDarkMode={isDarkTheme} onToggleTheme={toggleTheme} />,
+    };
+
+    // Protected view logic
+    const protectedViews: Partial<Record<ViewState, { roles: UserRole[], component: React.ReactNode }>> = {
+        [ViewState.CLASSES]: { roles: ROLE_GROUPS.STAFF_ABOVE, component: <ClassList {...commonProps} /> },
+        [ViewState.PRESENSI]: { roles: ROLE_GROUPS.STAFF_ABOVE, component: <Presensi {...commonProps} /> },
+        [ViewState.SCANNER]: { roles: ROLE_GROUPS.STAFF_ABOVE, component: <QRScanner onBack={handleBack} /> },
+        [ViewState.REPORTS]: { roles: ROLE_GROUPS.AUTHENTICATED, component: <Reports {...commonProps} /> },
+        [ViewState.JOURNAL]: { roles: ROLE_GROUPS.STAFF_ABOVE, component: <TeachingJournal onBack={handleBack} /> },
+        [ViewState.STUDENTS]: { roles: ROLE_GROUPS.STAFF_ABOVE, component: <StudentData onBack={handleBack} userRole={userRole} /> },
+        [ViewState.ALUMNI]: { roles: ROLE_GROUPS.STAFF_ABOVE, component: <AlumniData onBack={handleBack} userRole={userRole} /> },
+        [ViewState.MUTATION]: { roles: ROLE_GROUPS.STAFF_ABOVE, component: <MutationData onBack={handleBack} userRole={userRole} /> },
+        [ViewState.TEACHERS]: { roles: ROLE_GROUPS.STAFF_ABOVE, component: <TeacherData onBack={handleBack} userRole={userRole} /> },
+        [ViewState.ACADEMIC_YEAR]: { roles: ROLE_GROUPS.ADMIN_DEV, component: <AcademicYear onBack={handleBack} /> },
+        [ViewState.PROMOTION]: { roles: ROLE_GROUPS.ADMIN_DEV, component: <ClassPromotion onBack={handleBack} /> },
+        [ViewState.CREATE_ACCOUNT]: { roles: ROLE_GROUPS.ADMIN_DEV, component: <CreateAccount onBack={handleBack} userRole={userRole} /> },
+        [ViewState.DEVELOPER]: { roles: ROLE_GROUPS.ADMIN_DEV, component: <DeveloperConsole onBack={handleBack} /> },
+    };
+
+    if (viewMap[currentView]) return viewMap[currentView];
+    
+    const protectedConfig = protectedViews[currentView];
+    if (protectedConfig) {
         return (
-            <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={handleBack}>
-                <CreateAccount onBack={handleBack} userRole={userRole} />
+            <ProtectedRoute allowedRoles={protectedConfig.roles} userRole={userRole} onBack={handleBack}>
+                {protectedConfig.component}
             </ProtectedRoute>
         );
-      case ViewState.DEVELOPER: return <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={handleBack}><DeveloperConsole onBack={handleBack} /></ProtectedRoute>;
-      case ViewState.SETTINGS: return <Settings onBack={handleBack} onNavigate={handleNavigate} onLogout={handleLogout} isDarkMode={isDarkTheme} onToggleTheme={toggleTheme} userRole={userRole} />;
-      default: return <GenericView title="Fitur" onBack={handleBack} />;
     }
+
+    return <GenericView title="Fitur" onBack={handleBack} />;
   };
 
   if (authLoading) {
@@ -257,24 +270,28 @@ const App: React.FC = () => {
   }
 
   const isLoginPage = currentView === ViewState.LOGIN;
-  // Sembunyikan navigasi bawah jika di halaman login atau saat sedang scanning QR
   const showBottomNav = !isLoginPage && currentView !== ViewState.SCANNER;
 
   return (
-    <div className={`h-screen w-full flex flex-col relative overflow-hidden ${isDarkTheme ? 'bg-[#020617]' : 'bg-[#f8fafc]'} transition-colors duration-500`}>
+    <div className={`min-h-screen w-full flex flex-col relative transition-colors duration-500 ${isDarkTheme ? 'bg-[#020617]' : 'bg-[#f8fafc]'}`}>
+        {/* MOCK MODE UI WARNING */}
+        {isMockMode && (
+            <div className="fixed top-0 left-0 right-0 z-[1100] bg-orange-500 text-white text-[8px] font-black uppercase text-center py-1 tracking-[0.3em] flex items-center justify-center gap-2">
+                <ShieldCheckIcon className="w-3 h-3" /> Simulasi Aktif - Data Tidak Disimpan ke Cloud
+            </div>
+        )}
+
         {isLoginPage ? (
             <Suspense fallback={<PageLoader />}>
-                {renderViewContent()}
+                <div className="flex-1 flex flex-col">{renderViewContent()}</div>
             </Suspense>
         ) : (
-            <div className="h-full w-full relative flex overflow-hidden">
-                {/* Desktop Sidebar (Always on Large Screens) */}
+            <div className="flex-1 flex overflow-hidden">
                 <div className="hidden lg:block w-72 shrink-0 h-full border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-[#0B1121] z-40">
                     <Sidebar currentView={currentView} onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />
                 </div>
                 
-                {/* Main Content Area */}
-                <div className="flex-1 flex flex-col h-full w-full relative overflow-hidden">
+                <div className="flex-1 flex flex-col relative overflow-hidden">
                     <div className="flex-1 overflow-hidden relative z-10">
                         <Suspense fallback={<PageLoader />}>
                             <div key={viewKey} className="h-full w-full relative">
@@ -283,7 +300,6 @@ const App: React.FC = () => {
                         </Suspense>
                     </div>
                     
-                    {/* Mobile Dock (Hidden on Large screens and in Scanner view) */}
                     {showBottomNav && (
                         <div className="shrink-0 z-40 lg:hidden">
                             <BottomNav currentView={currentView} onNavigate={handleNavigate} userRole={userRole} />
