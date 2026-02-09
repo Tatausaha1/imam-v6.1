@@ -1,4 +1,3 @@
-
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -104,7 +103,8 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
             type: 'warning'
         };
         setLastScanned(result);
-        setTimeout(() => { setLastScanned(null); setShowFlash(null); isProcessing.current = false; }, 3000);
+        // Kecepatan dinaikkan: jeda reset dipersingkat menjadi 1500ms untuk error sesi
+        setTimeout(() => { setLastScanned(null); setShowFlash(null); isProcessing.current = false; }, 1500);
         return;
     }
 
@@ -126,24 +126,42 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
           setLastScanned(newScan);
           setScanHistory(prev => [newScan, ...prev].slice(0, 3));
       } else {
-          setShowFlash('error');
-          playBeep('error');
-          const errScan: RecentScan = {
-              id: cleanCode,
-              name: "Gagal Absensi",
-              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              status: result.message,
-              type: 'error'
-          };
-          setLastScanned(errScan);
-          toast.error(result.message);
+          const isAlreadyScanned = result.message.includes("SUDAH SCAN");
+          
+          if (isAlreadyScanned) {
+              setShowFlash('warning');
+              const warnScan: RecentScan = {
+                  id: cleanCode,
+                  name: result.student?.namaLengkap || "Perhatian",
+                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  status: result.message,
+                  type: 'warning'
+              };
+              setLastScanned(warnScan);
+          } else {
+              setShowFlash('error');
+              playBeep('error');
+              const errScan: RecentScan = {
+                  id: cleanCode,
+                  name: result.student?.namaLengkap || "Gagal Absensi",
+                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  status: result.message,
+                  type: 'error'
+              };
+              setLastScanned(errScan);
+              toast.error(result.message);
+          }
       }
       
+      // OPTIMASI KECEPATAN: Cooldown dipersingkat menjadi 1200ms (1.2 detik)
+      // Ini memungkinkan pemindaian beruntun yang jauh lebih cepat untuk antrean siswa.
       setTimeout(() => { 
-        setLastScanned(null); 
-        setShowFlash(null);
-        isProcessing.current = false; 
-      }, 3000);
+        if (isMounted.current) {
+          setLastScanned(null); 
+          setShowFlash(null);
+          isProcessing.current = false; 
+        }
+      }, 1200);
     } catch (e) { 
         isProcessing.current = false; 
         setShowFlash(null);
@@ -167,16 +185,21 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
       
       const width = window.innerWidth;
       const height = window.innerHeight;
-      // Gunakan qrbox yang sangat luas untuk kebebasan scan di seluruh area
-      const qrboxSize = Math.min(width, height) * 0.95;
+      // OPTIMASI FOKUS: Area pindai diatur ke 80% (sebelumnya 95%) agar fokus kamera lebih tajam pada objek tengah
+      const qrboxSize = Math.min(width, height) * 0.8;
 
       await html5QrCode.start(
         { facingMode: mode }, 
         { 
-            fps: 30, 
+            fps: 30, // Kecepatan sensor 30 frame per detik
             qrbox: { width: qrboxSize, height: qrboxSize },
             aspectRatio: width / height,
-            videoConstraints: { focusMode: "continuous", facingMode: mode } as any
+            videoConstraints: { 
+                focusMode: "continuous", 
+                facingMode: mode,
+                // Prioritas pada kecepatan deteksi
+                frameRate: { ideal: 30 }
+            } as any
         }, 
         handleScan, 
         () => {}
@@ -236,10 +259,10 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
   };
 
   const getFlashColor = () => {
-      if (showFlash === 'success') return 'bg-emerald-500/20';
-      if (showFlash === 'error') return 'bg-rose-500/20';
-      if (showFlash === 'warning') return 'bg-amber-500/20';
-      if (showFlash === 'haid') return 'bg-pink-500/20';
+      if (showFlash === 'success') return 'bg-emerald-500/15';
+      if (showFlash === 'error') return 'bg-rose-500/15';
+      if (showFlash === 'warning') return 'bg-amber-500/15';
+      if (showFlash === 'haid') return 'bg-pink-500/15';
       return 'bg-transparent';
   };
 
@@ -249,14 +272,12 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
         {/* FLASH EFFECT LAYER */}
         <div className={`absolute inset-0 z-[100] pointer-events-none transition-all duration-200 ${getFlashColor()}`}></div>
 
-        {/* --- CAMERA ENGINE (Truly Full Frame) --- */}
+        {/* --- CAMERA ENGINE --- */}
         <div id="reader-core" className="absolute inset-0 w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:!object-cover opacity-100"></div>
 
-        {/* --- NO OVERLAY OVER CAMERA FEED --- */}
-
-        {/* --- DYNAMIC ISLAND NOTIFICATION (SCAN FEEDBACK) --- */}
-        <div className="absolute top-4 inset-x-0 z-[150] flex justify-center pointer-events-none px-4">
-            {lastScanned ? (
+        {/* --- DYNAMIC NOTIFICATION --- */}
+        <div className="absolute top-6 inset-x-0 z-[150] flex justify-center pointer-events-none px-4">
+            {lastScanned && (
                 <div className={`w-full max-w-[340px] backdrop-blur-3xl px-5 py-3.5 rounded-[2.2rem] border shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center gap-4 animate-in slide-in-from-top-10 duration-500 ring-4 ring-black/20 ${
                     lastScanned.type === 'success' ? 'bg-emerald-600/90 border-emerald-400/40' :
                     lastScanned.type === 'error' ? 'bg-rose-600/90 border-rose-400/40' :
@@ -274,30 +295,24 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
                         <span className="text-[8px] font-mono text-white/60">{lastScanned.time}</span>
                     </div>
                 </div>
-            ) : (
-                /* Minimal Static pill state */
-                <div className="w-32 h-8 bg-black/60 backdrop-blur-md rounded-full border border-white/5 flex items-center justify-center gap-2 shadow-2xl transition-all duration-700">
-                    <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
-                    <span className="text-[8px] font-black text-white/40 uppercase tracking-[0.2em]">Ready</span>
-                </div>
             )}
         </div>
 
-        {/* --- TOP HUD (STATUS & SESSION) --- */}
-        <div className="absolute top-16 inset-x-6 z-50 flex items-start justify-between pointer-events-none">
+        {/* --- FLOATING CONTROLS --- */}
+        <div className="absolute top-16 inset-x-6 z-50 flex items-start justify-between pointer-events-auto">
             <button 
                 onClick={onBack} 
-                className="p-4 rounded-2xl bg-black/50 backdrop-blur-xl border border-white/10 text-white active:scale-90 pointer-events-auto shadow-2xl"
+                className="p-4 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 text-white active:scale-90 transition-all shadow-2xl"
             >
                 <ArrowLeftIcon className="w-5 h-5" />
             </button>
             
             <div className="flex flex-col items-end gap-2">
-                <div className="bg-black/60 backdrop-blur-xl border border-white/10 px-5 py-2.5 rounded-2xl flex flex-col items-end shadow-2xl">
+                <div className="bg-black/40 backdrop-blur-md border border-white/10 px-5 py-2.5 rounded-2xl flex flex-col items-end shadow-2xl">
                     <span className={`text-[9px] font-black uppercase tracking-[0.2em] mb-0.5 ${session === 'Luar Sesi' ? 'text-rose-400' : 'text-emerald-400'}`}>
-                        {session === 'Luar Sesi' ? 'Sesi Tutup' : `Sesi: ${session.toUpperCase()}`}
+                        {session === 'Luar Sesi' ? 'Sesi Tutup' : session.toUpperCase()}
                     </span>
-                    <span className="text-xs font-mono font-black text-white opacity-80">
+                    <span className="text-xs font-mono font-black text-white opacity-60">
                         {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                 </div>
@@ -307,16 +322,16 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
         {/* --- BOTTOM ACTIVITY REEL & CONTROLS --- */}
         <div className="absolute bottom-10 inset-x-0 z-50 flex flex-col items-center gap-6">
             
-            {/* History Feed - Floating over camera */}
+            {/* History Feed */}
             <div className="w-full max-w-xs space-y-1.5 px-6 pointer-events-none">
                 {scanHistory.slice(0, 2).map((h, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-black/50 backdrop-blur-lg px-4 py-2.5 rounded-2xl border border-white/5 animate-in slide-in-from-bottom-2" style={{ opacity: 1 - (i * 0.4) }}>
+                    <div key={i} className="flex items-center gap-3 bg-black/30 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/5 animate-in slide-in-from-bottom-2" style={{ opacity: 1 - (i * 0.4) }}>
                         <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black ${h.type === 'haid' ? 'bg-pink-500/20 text-pink-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
                             {h.name.charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-[9px] font-black text-white/90 uppercase truncate">{h.name}</p>
-                            <p className="text-[7px] font-bold text-white/30 uppercase tracking-tighter">{h.status}</p>
+                            <p className="text-[9px] font-black text-white/80 uppercase truncate">{h.name}</p>
+                            <p className="text-[7px] font-bold text-white/20 uppercase tracking-tighter">{h.status}</p>
                         </div>
                     </div>
                 ))}
@@ -325,7 +340,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
             <div className="flex items-center gap-8 pointer-events-auto">
                 <button 
                     onClick={() => setFacingMode(facingMode === 'environment' ? 'user' : 'environment')}
-                    className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white active:scale-75 transition-all shadow-xl"
+                    className="w-14 h-14 rounded-full bg-white/5 backdrop-blur-md border border-white/10 flex items-center justify-center text-white active:scale-75 transition-all shadow-xl"
                 >
                     <ArrowPathIcon className="w-6 h-6" />
                 </button>
@@ -334,9 +349,9 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
                     onClick={() => {
                         const next = !isHaidMode;
                         setIsHaidMode(next);
-                        toast.info(`Mode Ibadah (Haid) ${next ? 'AKTIF' : 'NONAKTIF'}`);
+                        toast.info(`Mode Haid ${next ? 'AKTIF' : 'NONAKTIF'}`);
                     }}
-                    className={`w-18 h-18 rounded-full flex flex-col items-center justify-center transition-all active:scale-90 border-2 shadow-2xl ${isHaidMode ? 'bg-pink-600 border-pink-400 text-white animate-pulse' : 'bg-white/10 backdrop-blur-xl border-white/10 text-white'}`}
+                    className={`w-18 h-18 rounded-full flex flex-col items-center justify-center transition-all active:scale-90 border-2 shadow-2xl ${isHaidMode ? 'bg-pink-600 border-pink-400 text-white animate-pulse' : 'bg-white/5 backdrop-blur-md border-white/10 text-white'}`}
                 >
                     <HeartIcon className={`w-7 h-7 ${isHaidMode ? 'fill-current' : ''}`} />
                 </button>
@@ -344,7 +359,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
                 {hasTorch && (
                     <button 
                         onClick={toggleTorch}
-                        className={`w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-75 shadow-xl border ${isTorchOn ? 'bg-yellow-400 border-yellow-300 text-black shadow-[0_0_20px_rgba(250,204,21,0.4)]' : 'bg-white/10 backdrop-blur-xl border-white/10 text-white'}`}
+                        className={`w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-75 shadow-xl border ${isTorchOn ? 'bg-yellow-400 border-yellow-300 text-black shadow-[0_0_20px_rgba(250,204,21,0.4)]' : 'bg-white/5 backdrop-blur-md border-white/10 text-white'}`}
                     >
                         <SunIcon className="w-6 h-6" />
                     </button>
@@ -356,7 +371,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
         {isInitializing && (
             <div className="absolute inset-0 z-[200] bg-black flex flex-col items-center justify-center gap-6">
                 <Loader2 className="w-12 h-12 text-indigo-500 animate-spin opacity-40" />
-                <p className="text-[10px] font-black text-indigo-500/60 uppercase tracking-[0.5em] animate-pulse">Initializing Lense v6.2</p>
+                <p className="text-[10px] font-black text-indigo-500/60 uppercase tracking-[0.5em] animate-pulse">Lense Engine v6.2 Optimized</p>
             </div>
         )}
     </div>

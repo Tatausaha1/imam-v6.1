@@ -240,7 +240,6 @@ const App: React.FC = () => {
             </ProtectedRoute>
         );
       case ViewState.DEVELOPER: return <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={handleBack}><DeveloperConsole onBack={handleBack} /></ProtectedRoute>;
-      // Fix: Changed 'isDarkTheme' prop to 'isDarkMode' to match SettingsProps interface in Settings.tsx
       case ViewState.SETTINGS: return <Settings onBack={handleBack} onNavigate={handleNavigate} onLogout={handleLogout} isDarkMode={isDarkTheme} onToggleTheme={toggleTheme} userRole={userRole} />;
       default: return <GenericView title="Fitur" onBack={handleBack} />;
     }
@@ -258,6 +257,8 @@ const App: React.FC = () => {
   }
 
   const isLoginPage = currentView === ViewState.LOGIN;
+  // Sembunyikan navigasi bawah jika di halaman login atau saat sedang scanning QR
+  const showBottomNav = !isLoginPage && currentView !== ViewState.SCANNER;
 
   return (
     <div className={`h-screen w-full flex flex-col relative overflow-hidden ${isDarkTheme ? 'bg-[#020617]' : 'bg-[#f8fafc]'} transition-colors duration-500`}>
@@ -282,10 +283,12 @@ const App: React.FC = () => {
                         </Suspense>
                     </div>
                     
-                    {/* Mobile Dock (Hidden on Large screens) */}
-                    <div className="shrink-0 z-40 lg:hidden">
-                        <BottomNav currentView={currentView} onNavigate={handleNavigate} userRole={userRole} />
-                    </div>
+                    {/* Mobile Dock (Hidden on Large screens and in Scanner view) */}
+                    {showBottomNav && (
+                        <div className="shrink-0 z-40 lg:hidden">
+                            <BottomNav currentView={currentView} onNavigate={handleNavigate} userRole={userRole} />
+                        </div>
+                    )}
                 </div>
             </div>
         )}

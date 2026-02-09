@@ -1,4 +1,3 @@
-
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -102,7 +101,7 @@ export const recordAttendanceByScan = async (rawCode: string, session: Attendanc
         const currentData = currentAttSnap.exists ? currentAttSnap.data() : null;
 
         if (currentData && currentData[fieldName]) {
-            return { success: false, message: `SUDAH SCAN ${session.toUpperCase()}!` };
+            return { success: false, message: `SUDAH SCAN ${session.toUpperCase()}!`, student: studentData };
         }
 
         const updatePayload: any = { 
