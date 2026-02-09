@@ -103,8 +103,13 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
             type: 'warning'
         };
         setLastScanned(result);
-        // Kecepatan dinaikkan: jeda reset dipersingkat menjadi 1500ms untuk error sesi
-        setTimeout(() => { setLastScanned(null); setShowFlash(null); isProcessing.current = false; }, 1500);
+        setTimeout(() => { 
+            if (isMounted.current) {
+                setLastScanned(null); 
+                setShowFlash(null); 
+                isProcessing.current = false; 
+            }
+        }, 500); // Sinkron ke 0.5s
         return;
     }
 
@@ -114,7 +119,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
       if (result.success) {
           setShowFlash(isHaidMode ? 'haid' : 'success');
           playBeep('success');
-          if (navigator.vibrate) navigator.vibrate(100);
+          if (navigator.vibrate) navigator.vibrate(80); // Vibrasi lebih pendek untuk efisiensi
 
           const newScan: RecentScan = {
               id: cleanCode,
@@ -149,19 +154,17 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
                   type: 'error'
               };
               setLastScanned(errScan);
-              toast.error(result.message);
           }
       }
       
-      // OPTIMASI KECEPATAN: Cooldown dipersingkat menjadi 1200ms (1.2 detik)
-      // Ini memungkinkan pemindaian beruntun yang jauh lebih cepat untuk antrean siswa.
+      // ULTRA SPEED: Reset status processing dalam 0.5 detik
       setTimeout(() => { 
         if (isMounted.current) {
           setLastScanned(null); 
           setShowFlash(null);
           isProcessing.current = false; 
         }
-      }, 1200);
+      }, 500);
     } catch (e) { 
         isProcessing.current = false; 
         setShowFlash(null);
@@ -185,20 +188,17 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
       
       const width = window.innerWidth;
       const height = window.innerHeight;
-      // OPTIMASI FOKUS: Area pindai diatur ke 80% (sebelumnya 95%) agar fokus kamera lebih tajam pada objek tengah
-      const qrboxSize = Math.min(width, height) * 0.8;
 
       await html5QrCode.start(
         { facingMode: mode }, 
         { 
-            fps: 30, // Kecepatan sensor 30 frame per detik
-            qrbox: { width: qrboxSize, height: qrboxSize },
+            fps: 60, // Naikkan ke 60 FPS jika didukung hardware untuk akurasi instan
+            // HILANGKAN QRBOX: Memungkinkan scan di seluruh area kamera (Full Frame)
             aspectRatio: width / height,
             videoConstraints: { 
                 focusMode: "continuous", 
                 facingMode: mode,
-                // Prioritas pada kecepatan deteksi
-                frameRate: { ideal: 30 }
+                frameRate: { ideal: 60, min: 30 }
             } as any
         }, 
         handleScan, 
@@ -259,10 +259,10 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
   };
 
   const getFlashColor = () => {
-      if (showFlash === 'success') return 'bg-emerald-500/15';
-      if (showFlash === 'error') return 'bg-rose-500/15';
-      if (showFlash === 'warning') return 'bg-amber-500/15';
-      if (showFlash === 'haid') return 'bg-pink-500/15';
+      if (showFlash === 'success') return 'bg-emerald-500/20';
+      if (showFlash === 'error') return 'bg-rose-500/20';
+      if (showFlash === 'warning') return 'bg-amber-500/20';
+      if (showFlash === 'haid') return 'bg-pink-500/20';
       return 'bg-transparent';
   };
 
@@ -270,15 +270,15 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
     <div className="flex flex-col h-full bg-black relative overflow-hidden select-none">
         
         {/* FLASH EFFECT LAYER */}
-        <div className={`absolute inset-0 z-[100] pointer-events-none transition-all duration-200 ${getFlashColor()}`}></div>
+        <div className={`absolute inset-0 z-[100] pointer-events-none transition-all duration-100 ${getFlashColor()}`}></div>
 
-        {/* --- CAMERA ENGINE --- */}
+        {/* --- CAMERA ENGINE (Full Frame Enabled) --- */}
         <div id="reader-core" className="absolute inset-0 w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:!object-cover opacity-100"></div>
 
         {/* --- DYNAMIC NOTIFICATION --- */}
         <div className="absolute top-6 inset-x-0 z-[150] flex justify-center pointer-events-none px-4">
             {lastScanned && (
-                <div className={`w-full max-w-[340px] backdrop-blur-3xl px-5 py-3.5 rounded-[2.2rem] border shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center gap-4 animate-in slide-in-from-top-10 duration-500 ring-4 ring-black/20 ${
+                <div className={`w-full max-w-[340px] backdrop-blur-3xl px-5 py-3.5 rounded-[2.2rem] border shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center gap-4 animate-in slide-in-from-top-10 duration-300 ring-4 ring-black/20 ${
                     lastScanned.type === 'success' ? 'bg-emerald-600/90 border-emerald-400/40' :
                     lastScanned.type === 'error' ? 'bg-rose-600/90 border-rose-400/40' :
                     lastScanned.type === 'haid' ? 'bg-pink-600/90 border-pink-400/40' :
@@ -322,7 +322,6 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
         {/* --- BOTTOM ACTIVITY REEL & CONTROLS --- */}
         <div className="absolute bottom-10 inset-x-0 z-50 flex flex-col items-center gap-6">
             
-            {/* History Feed */}
             <div className="w-full max-w-xs space-y-1.5 px-6 pointer-events-none">
                 {scanHistory.slice(0, 2).map((h, i) => (
                     <div key={i} className="flex items-center gap-3 bg-black/30 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/5 animate-in slide-in-from-bottom-2" style={{ opacity: 1 - (i * 0.4) }}>
@@ -371,7 +370,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
         {isInitializing && (
             <div className="absolute inset-0 z-[200] bg-black flex flex-col items-center justify-center gap-6">
                 <Loader2 className="w-12 h-12 text-indigo-500 animate-spin opacity-40" />
-                <p className="text-[10px] font-black text-indigo-500/60 uppercase tracking-[0.5em] animate-pulse">Lense Engine v6.2 Optimized</p>
+                <p className="text-[10px] font-black text-indigo-500/60 uppercase tracking-[0.5em] animate-pulse">Lense Engine v6.3 Full-Frame</p>
             </div>
         )}
     </div>
