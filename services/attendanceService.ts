@@ -1,3 +1,4 @@
+
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -5,8 +6,7 @@
 
 import firebase from 'firebase/compat/app';
 import { db, isMockMode } from './firebase';
-// Fix: Using subpath import for format to resolve export member error
-import format from 'date-fns/format';
+import { format } from 'date-fns';
 import { Student, AttendanceStatus } from '../types';
 
 export type AttendanceSession = 'Masuk' | 'Duha' | 'Zuhur' | 'Ashar' | 'Pulang';
@@ -28,23 +28,27 @@ const getActiveSessionConfig = async () => {
     try {
         const snap = await db.collection(COLLECTION_ACADEMIC_YEARS).where('isActive', '==', true).limit(1).get();
         if (snap.empty) return null;
-        return snap.docs[0].data().config || null;
-    } catch (e) { return null; }
+        const data = snap.docs[0].data();
+        return data.config || null;
+    } catch (e) {
+        return null;
+    }
 };
 
 export const recordAttendanceByScan = async (rawCode: string, session: AttendanceSession, isHaid: boolean = false): Promise<ScanResult> => {
-    const code = String(rawCode || '').trim();
-    if (!code) return { success: false, message: "KODE QR KOSONG" };
+    const code = String(rawCode || '').replace(/[\x00-\x1F\x7F-\x9F]/g, "").trim();
+    if (!code) return { success: false, message: "ID KOSONG" };
 
     const now = new Date();
     const today = format(now, "yyyy-MM-dd");
-    const timestamp = format(now, "HH:mm:ss");
+    const nowFull = format(now, "HH:mm:ss");
     const currentDay = now.getDay(); 
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     
     const config = await getActiveSessionConfig();
+    
     if (config?.workingDays && !config.workingDays.includes(currentDay)) {
-        return { success: false, message: "HARI INI LIBUR SISTEM" };
+        return { success: false, message: "HARI LIBUR" };
     }
 
     const toMin = (timeStr: string) => {
@@ -53,92 +57,85 @@ export const recordAttendanceByScan = async (rawCode: string, session: Attendanc
         return h * 60 + m;
     };
 
-    const mLimit = toMin(config?.masukLimit || "07:30");
-    let pLimitStr = config?.pulangLimit || "16:00";
-    if (currentDay === 5) pLimitStr = config?.pulangLimitJumat || "11:30";
-    const pLimit = toMin(pLimitStr);
+    const masukLimit = toMin(config?.masukLimit || "07:30");
+    let pulangLimitStr = config?.pulangLimit || "16:00";
+    if (currentDay === 5) pulangLimitStr = config?.pulangLimitJumat || "11:30";
+    const pulangLimit = toMin(pulangLimitStr);
 
     const isPrayerSession = ['Duha', 'Zuhur', 'Ashar'].includes(session);
     
-    let saveValue = timestamp;
+    // FORMAT PENYIMPANAN TERPADU: HH:mm:ss | [META]
+    let nowValue = nowFull;
     let meta = "";
 
     if (isHaid && isPrayerSession) {
         meta = "H";
-    } else if (session === 'Masuk' && currentMinutes > mLimit) {
-        meta = `+${currentMinutes - mLimit}`;
-    } else if (session === 'Pulang' && currentMinutes < pLimit) {
-        meta = `-${pLimit - currentMinutes}`;
+    } else if (session === 'Masuk' && currentMinutes > masukLimit) {
+        meta = `+${currentMinutes - masukLimit}`;
+    } else if (session === 'Pulang' && currentMinutes < pulangLimit) {
+        meta = `-${pulangLimit - currentMinutes}`;
     }
 
-    if (meta) saveValue = `${timestamp} | ${meta}`;
+    if (meta) {
+        nowValue = `${nowFull} | ${meta}`;
+    }
     
     const fieldMap: Record<string, string> = {
         'Masuk': 'checkIn', 'Duha': 'duha', 'Zuhur': 'zuhur', 'Ashar': 'ashar', 'Pulang': 'checkOut'
     };
     const fieldName = fieldMap[session];
 
-    if (isMockMode) return { success: true, message: `${session.toUpperCase()} BERHASIL (MOCK)`, student: { namaLengkap: "SISWA SIMULASI" } as any };
+    if (isMockMode) return { success: true, message: "BERHASIL (MOCK)", student: { namaLengkap: "Siswa Simulasi" } as any };
     if (!db) return { success: false, message: "DATABASE OFFLINE" };
 
     try {
         let studentData: Student | null = null;
-        const docRef = db.collection(COLLECTION_STUDENTS).doc(code);
-        const docSnap = await docRef.get();
+        const studentRef = db.collection(COLLECTION_STUDENTS).doc(code);
+        const studentSnap = await studentRef.get();
         
-        if (docSnap.exists) {
-            studentData = { id: docSnap.id, ...docSnap.data() } as Student;
+        if (studentSnap.exists) {
+            studentData = { id: studentSnap.id, ...studentSnap.data() } as Student;
         } else {
             const query = await db.collection(COLLECTION_STUDENTS).where('idUnik', '==', code).limit(1).get();
             if (!query.empty) studentData = { id: query.docs[0].id, ...query.docs[0].data() } as Student;
         }
 
-        if (!studentData) return { success: false, message: "ID TIDAK DIKENAL SISTEM" };
+        if (!studentData) return { success: false, message: `ID "${code}" TIDAK ADA` };
 
         const attendanceId = `${studentData.id}_${today}`;
         const attendanceRef = db.collection(COLLECTION_ATTENDANCE).doc(attendanceId);
-        const currentAttSnap = await attendanceRef.get();
-        const currentData = currentAttSnap.exists ? currentAttSnap.data() : null;
+        const docSnapshot = await attendanceRef.get();
+        const currentData = docSnapshot?.exists ? docSnapshot.data() : null;
 
         if (currentData && currentData[fieldName]) {
-            return { success: false, message: `SUDAH SCAN ${session.toUpperCase()}!`, student: studentData };
+            return { success: false, message: `SUDAH SCAN ${session.toUpperCase()}` };
         }
 
         const updatePayload: any = { 
             studentId: studentData.id,
             studentName: studentData.namaLengkap,
-            class: studentData.tingkatRombel || '-',
+            class: studentData.tingkatRombel,
             idUnik: studentData.idUnik || code,
-            gender: studentData.jenisKelamin,
             date: today,
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
-            [fieldName]: saveValue
+            [fieldName]: nowValue
         };
 
-        // Logic Status Harian
-        if (meta === 'H') {
+        // Update status umum
+        if (meta === "H") {
             updatePayload.status = 'Haid';
         } else if (!currentData?.status || currentData.status === 'Alpha' || currentData.status === 'Hadir') {
-             if (session === 'Masuk') {
-                 updatePayload.status = (currentMinutes > mLimit) ? 'Terlambat' : 'Hadir';
-             } else {
-                 updatePayload.status = currentData?.status || 'Hadir';
-             }
+            updatePayload.status = (session === 'Masuk' && currentMinutes > masukLimit) ? 'Terlambat' : 'Hadir';
         }
 
         await attendanceRef.set(updatePayload, { merge: true });
-        
-        let returnMsg = `${session.toUpperCase()} BERHASIL`;
-        if (meta === 'H') returnMsg = `${session.toUpperCase()} (HAID) BERHASIL`;
-        else if (meta.includes('+')) returnMsg = `${session.toUpperCase()} (TERLAMBAT) BERHASIL`;
 
         return { 
             success: true, 
-            message: returnMsg, 
+            message: meta === 'H' ? `${session.toUpperCase()} (HAID)` : `${session.toUpperCase()} BERHASIL`, 
             student: studentData 
         };
     } catch (error: any) {
-        console.error("Attendance Sync Error:", error);
-        return { success: false, message: "ERROR SINKRONISASI CLOUD" };
+        return { success: false, message: "ERROR DATABASE" };
     }
 };

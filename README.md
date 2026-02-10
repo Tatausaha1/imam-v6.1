@@ -1,76 +1,71 @@
+
 # IMAM - Integrated Madrasah Academic Manager 🏫
-**Version 6.2 - Enterprise Cloud Edition**
 
-**IMAM** adalah ekosistem manajemen madrasah modern yang dirancang untuk **MAN 1 Hulu Sungai Tengah**. Aplikasi ini mengintegrasikan administrasi cerdas, presensi berbasis QR Code tingkat tinggi, dan asisten pendidikan bertenaga AI dalam satu platform *mobile-first*.
+**IMAM** adalah sistem manajemen madrasah modern yang dirancang khusus untuk **MAN 1 Hulu Sungai Tengah**. Aplikasi ini mengintegrasikan administrasi sekolah, absensi berbasis QR Code, pengelolaan nilai, hingga asisten cerdas berbasis AI dalam satu platform mobile-first yang responsif.
 
----
+![Vercel Deployment](https://img.shields.io/badge/Deploy-Vercel-black?style=for-the-badge&logo=vercel)
+![React](https://img.shields.io/badge/React-19-blue?style=for-the-badge&logo=react)
+![Vite](https://img.shields.io/badge/Vite-6-purple?style=for-the-badge&logo=vite)
+![Firebase](https://img.shields.io/badge/Firebase-Database-orange?style=for-the-badge&logo=firebase)
 
-## 📸 Tampilan Antarmuka (Preview)
-*Berikut adalah tampilan aplikasi jika dijalankan di perangkat seluler:*
+## 🚀 Fitur Utama
+- **Mobile-First Experience**: Desain UI yang bersih dan dioptimalkan untuk perangkat mobile (tanpa bingkai kontainer yang mengganggu).
+- **Presensi QR Code**: Sistem absensi harian (Masuk, Duha, Zuhur, Ashar, Pulang) dengan pemindaian QR dan suara feedback otomatis.
+- **Pencarian Teroptimasi**: Fitur pencarian siswa berdasarkan Nama, NISN, atau ID Unik yang cepat dan aman dari data kosong.
+- **AI Educational Assistant**: Terintegrasi dengan **Google Gemini API** untuk pembuatan RPP, Kuis, dan materi ajar otomatis.
+- **Layanan Surat Digital (PTSP)**: Alur kerja permohonan surat dengan verifikasi berjenjang hingga tanda tangan digital (QR Seal).
+- **Manajemen Data Induk**: Pengelolaan data siswa, guru, kelas, dan tahun akademik secara realtime via Firestore.
+- **PWA Ready**: Dapat diinstal di Android/iOS (Add to Home Screen) layaknya aplikasi asli.
 
-<div align="center">
-  <table table-layout="fixed" width="100%">
-    <tr>
-      <td width="33%" align="center">
-        <img src="./public/screenshots/dashboard.png" width="250" alt="Dashboard Utama" />
-        <br /><b>Dashboard Utama</b>
-      </td>
-      <td width="33%" align="center">
-        <img src="./public/screenshots/scanner.png" width="250" alt="Lensa Presensi QR" />
-        <br /><b>Ultra-Fast QR Scanner</b>
-      </td>
-      <td width="33%" align="center">
-        <img src="./public/screenshots/idcard.png" width="250" alt="Kartu Pelajar Digital" />
-        <br /><b>Kartu Pelajar Digital</b>
-      </td>
-    </tr>
-  </table>
-</div>
+## 🛠️ Panduan Deployment ke Vercel (PENTING)
 
-> **💡 Cara Memunculkan Gambar Anda:**
-> 1. Ambil screenshot aplikasi dari HP Anda.
-> 2. Simpan foto ke folder `public/screenshots/` dengan nama `dashboard.png`, `scanner.png`, dan `idcard.png`.
-> 3. Lakukan `git add .`, `git commit`, dan `git push`. Gambar akan otomatis muncul di sini.
+Aplikasi ini menggunakan **Vite** sebagai build tool. Untuk menghindari kesalahan deteksi framework oleh Vercel:
 
----
+### 1. Konfigurasi di Dashboard Vercel
+Saat mengimpor proyek, masuk ke bagian **Settings > General**:
+- **Framework Preset**: Ubah ke **Vite** (Jangan gunakan Next.js).
+- **Build Command**: `npm run build`
+- **Output Directory**: `dist`
 
-## 🚀 Fitur Unggulan
-- **⚡ Smart QR Presence**: Pemindaian full-frame dengan jeda respons hanya 0.5 detik. Mendukung mode Haid dan pencatatan sholat berjamaah.
-- **🤖 AI Academic Assistant**: Integrasi Google Gemini 3 Flash untuk pembuatan RPP, draf kuis, dan pengumuman otomatis.
-- **💬 Hybrid AI Helpdesk**: Layanan chat bantuan teknis yang menggabungkan kecerdasan GPT-4 dan Gemini.
-- **🪪 Digital Identification**: Kartu identitas siswa cerdas yang terhubung langsung dengan database cloud.
-- **✉️ Digital PTSP**: Alur surat menyurat mandiri dengan verifikasi berjenjang dan tanda tangan digital (QR Seal).
-- **🛡️ Enterprise Grade Security**: Proteksi database Firestore dengan aturan keamanan tingkat tinggi berbasis peran (role).
+### 2. Environment Variables
+Wajib tambahkan variabel berikut di Dashboard Vercel (Settings > Environment Variables):
 
----
+| Key | Value | Deskripsi |
+|---|---|---|
+| `GEMINI_API_KEY` | `YOUR_API_KEY_HERE` | Dapatkan di [Google AI Studio](https://aistudio.google.com/) |
 
-## 🛠️ Persiapan Teknis
-Sebelum melakukan deployment, pastikan variabel berikut sudah dikonfigurasi:
-- **Google Gemini API Key**: Untuk otak AI Generator.
-- **OpenAI API Key**: Untuk fitur Live Chat GPT-4.
-- **Firebase Project**: Firestore, Auth, dan Hosting diaktifkan.
+### 3. Authorized Domains
+Tambahkan URL deployment Anda (misal: `imam-school.vercel.app`) ke dalam daftar **Authorized Domains** di Firebase Console (Authentication > Settings > Authorized Domains).
 
----
+## 💻 Pengembangan Lokal
 
-## 🔼 Deployment ke Vercel (Gratis)
-Aplikasi ini dioptimasi untuk berjalan di paket **Vercel Hobby (Gratis)**.
-1. Hubungkan repository GitHub ini ke Vercel.
-2. Masukkan `GEMINI_API_KEY` dan `OPENAI_API_KEY` di tab Environment Variables.
-3. Klik **Deploy**.
+1. **Clone & Install**:
+   ```bash
+   git clone [url-repo-anda]
+   cd imam-management-school
+   npm install
+   ```
 
----
+2. **Setup Env**:
+   Buat file `.env` di root folder:
+   ```env
+   GEMINI_API_KEY=AIzaSy... (API Key Anda)
+   ```
 
-## 📊 Spesifikasi Sistem
-- **Frontend**: React 19, Tailwind CSS, Vite 6.
-- **Database**: Google Firebase (Realtime Persistence).
-- **AI Core**: Gemini 3 Flash & OpenAI GPT-4 Turbo.
-- **Tools**: jsPDF, XLSX, Html5-QRCode.
+3. **Run Dev**:
+   ```bash
+   npm run dev
+   ```
 
----
+## 📂 Struktur Proyek
+- `components/` : Komponen UI React (Dashboard, Login, Presensi, StudentData, dll).
+- `services/` : Logika Firebase, Firestore, dan integrasi Gemini AI.
+- `types.ts` : Definisi interface dan role pengguna.
+- `index.tsx` : Entry point aplikasi.
 
 ## 📝 Kontributor
 - **Lead Developer**: Akhmad Arifin (NIP: 19901004 202521 1012)
 - **Instansi**: MAN 1 Hulu Sungai Tengah
-- **Peran**: Penata Layanan Operasional / Fullstack Engineer
 
-© 2025 MAN 1 Hulu Sungai Tengah. All rights reserved.
+---
+*Build with ❤️ for better Indonesian Education.*

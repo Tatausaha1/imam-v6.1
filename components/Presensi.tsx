@@ -8,8 +8,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db, isMockMode } from '../services/firebase';
 import { Student, ViewState, AttendanceRecord } from '../types';
 import { toast } from 'sonner';
-// Fix: Using subpath import for format to resolve module export error
-import format from 'date-fns/format';
+import { format } from 'date-fns';
 import { id as localeID } from 'date-fns/locale/id'; 
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';

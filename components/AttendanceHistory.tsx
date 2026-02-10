@@ -9,8 +9,7 @@ import {
   XCircleIcon, SparklesIcon, ArrowRightIcon, StarIcon, ChartBarIcon
 } from './Icons';
 import { toast } from 'sonner';
-// Fix: Using subpath import for format to resolve module export error
-import format from 'date-fns/format';
+import { format } from 'date-fns';
 import { ViewState, AttendanceStatus, UserRole, AttendanceRecord, Student } from '../types';
 
 interface AttendanceHistoryProps {

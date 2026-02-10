@@ -1,20 +1,21 @@
+
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#ffffff" />
-    <title>IMAM - Enterprise School Manager</title>
+    <meta name="theme-color" content="#FFFFFF" />
+    <title>IMAM - School Management System</title>
     
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSI+PHBhdGggZD0iTTEyIDJMMyA1VjExQzMgMTYuNTUgNy40IDIxLjc0IDEyIDIzQzE2LjYgMjEuNzQgMjEgMTYuNTUgMjEgMTFWNUwxMiAyWiIgZmlsbD0iIzEwYjk4MSIvPjxwYXRoIGQ9Ik05IDEwQzkgMTAgMTAuNSAxMCAxMiAxMS41QzEzUgMTUgMTUgMTAgMTUgMTBWMTdDMTUgMTcgMTMuNSAxNyAxMiAxOC41QzEwLjUgMTcgOSAxNyA5IDE3VjEwWiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48cGF0aCBkPSJNMTIgMTEuNVYxOC41IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxwYXRoIGQ9Ik0xMiA2VjgiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://lh3.googleusercontent.com">
-    <link rel="dns-prefetch" href="https://lh3.googleusercontent.com">
-    
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -26,16 +27,9 @@
             fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
             colors: {
               indigo: {
-                50: '#f5f7ff',
-                100: '#ebf0ff',
-                200: '#ced9ff',
-                300: '#a1bcff',
-                400: '#6e91ff',
-                500: '#4767ff',
                 600: '#4f46e5',
                 700: '#4338ca',
                 800: '#3730a3',
-                900: '#312e81',
               }
             }
           }
@@ -56,26 +50,17 @@
         overscroll-behavior: none; 
         background-color: #f8fafc; 
         color: #0f172a; 
-        -webkit-font-smoothing: antialiased;
       }
-      .dark body { background-color: #020617; color: #f8fafc; }
-      * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; outline: none !important; }
+      .dark body { 
+        background-color: #020617; 
+        color: #f8fafc; 
+      }
+      * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
       .safe-pt { padding-top: var(--safe-area-top); }
       .safe-pb { padding-bottom: var(--safe-area-bottom); }
-      
-      /* Optimasi Scrollbar */
-      ::-webkit-scrollbar { width: 5px; height: 5px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: rgba(79, 70, 229, 0.1); border-radius: 20px; }
-      .dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.05); }
-      
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-thumb { background-color: rgba(79, 70, 229, 0.2); border-radius: 10px; }
       .scrollbar-hide::-webkit-scrollbar { display: none; }
-      
-      /* Hardware Acceleration untuk Animasi */
-      .will-change-transform { will-change: transform; }
-      
-      /* Optimasi Rendering List Panjang */
-      .content-visibility-auto { content-visibility: auto; }
     </style>
   <script type="importmap">
 {

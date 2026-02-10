@@ -122,17 +122,6 @@ const Settings: React.FC<SettingsProps> = ({
     }
   ];
 
-  if (userRole === UserRole.DEVELOPER) {
-      menuItems.splice(1, 0, {
-          label: 'Developer Console',
-          icon: CommandLineIcon,
-          action: () => onNavigate(ViewState.DEVELOPER),
-          color: 'text-slate-600',
-          bg: 'bg-slate-50 dark:bg-slate-700',
-          desc: 'Alat teknis & database'
-      });
-  }
-
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {

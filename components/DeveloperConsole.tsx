@@ -1,3 +1,4 @@
+
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -54,7 +55,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
       { id: 'assignments', label: 'Tugas', icon: RectangleStackIcon },
       { id: 'nilai', label: 'Nilai', icon: ShieldCheckIcon },
       { id: 'login_logs', label: 'Log Masuk', icon: CommandLineIcon },
-      { id: 'session_configs', label: 'Jam Sesi', icon: ClockIcon } // Added new collection
+      { id: 'session_configs', label: 'Jam Sesi', icon: ClockIcon }
   ];
 
   const checkAllCollections = async () => {
@@ -341,7 +342,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
                                 ) : (
                                     <table className="border-collapse table-fixed min-w-full">
                                         <thead className="sticky top-0 z-30">
-                                            <tr className="bg-slate-100 dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700">
+                                            <tr className="bg-slate-100 dark:bg-slate-900 border-b border-slate-300 dark:border-target-700">
                                                 <th className="w-10 h-10 border-r border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 sticky left-0 z-40"></th>
                                                 {tableHeaders.map((h, i) => (
                                                     <th key={h} className="px-4 py-2 border-r border-slate-300 dark:border-slate-700 text-[10px] font-black text-slate-500 uppercase tracking-tighter text-center min-w-[150px] bg-slate-100 dark:bg-slate-900">
@@ -407,44 +408,44 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ onBack }) => {
           </div>
       </div>
 
-      {/* JSON DOCUMENT EDITOR MODAL */}
+      {/* JSON DOCUMENT EDITOR MODAL - FULLSCREEN-ISH & ULTRA DENSE */}
       {isEditorOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-              <div className="bg-white dark:bg-[#0B1121] w-full max-w-xl rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in duration-300 border border-white/10 relative overflow-hidden flex flex-col max-h-[90vh]">
-                  <div className="flex justify-between items-center mb-6 shrink-0">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm md:p-4">
+              <div className="bg-white dark:bg-[#0B1121] w-[98vw] h-[96vh] md:w-[95vw] md:h-[94vh] rounded-3xl md:rounded-[3rem] p-3 md:p-5 shadow-2xl animate-in zoom-in duration-300 border border-white/10 relative overflow-hidden flex flex-col">
+                  <div className="flex justify-between items-center mb-2 shrink-0 px-2">
                       <div>
-                          <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight leading-none">
+                          <h3 className="text-base md:text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight leading-none">
                               {editorMode === 'add' ? 'New Document' : 'Patch Document'}
                           </h3>
-                          <p className="text-[9px] font-bold text-indigo-500 uppercase mt-2 tracking-widest">Target: /{selectedCollection}/{editingId || 'AutoID'}</p>
+                          <p className="text-[8px] font-bold text-indigo-500 uppercase mt-1 tracking-widest">Target: /{selectedCollection}/{editingId || 'AutoID'}</p>
                       </div>
-                      <button onClick={() => setIsEditorOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 transition-colors"><XCircleIcon className="w-8 h-8" /></button>
+                      <button onClick={() => setIsEditorOpen(false)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 transition-colors"><XCircleIcon className="w-6 h-6" /></button>
                   </div>
 
-                  <div className="flex-1 overflow-hidden flex flex-col space-y-4">
+                  <div className="flex-1 overflow-hidden flex flex-col space-y-2">
                       <div className="flex-1 relative bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-inner">
-                          <div className="absolute top-2 right-2 px-2 py-1 bg-slate-800 text-[8px] font-mono text-indigo-400 rounded uppercase">Format: JSON</div>
+                          <div className="absolute top-2 right-4 px-2 py-0.5 bg-slate-800/80 text-[7px] font-mono text-indigo-400 rounded uppercase z-10">Format: JSON</div>
                           <textarea 
                               value={jsonContent}
                               onChange={e => setJsonContent(e.target.value)}
-                              className="w-full h-full p-6 font-mono text-[11px] text-emerald-400 bg-transparent outline-none resize-none custom-scrollbar leading-relaxed"
+                              className="w-full h-full p-4 md:p-6 font-mono text-[10px] md:text-xs text-emerald-400 bg-transparent outline-none resize-none custom-scrollbar leading-relaxed"
                               spellCheck={false}
                           />
                       </div>
-                      <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800 flex gap-3">
-                          <InfoIcon className="w-5 h-5 text-indigo-500 shrink-0" />
-                          <p className="text-[10px] text-indigo-700 dark:text-indigo-300 leading-relaxed font-medium uppercase tracking-tight">Peringatan: Gunakan format JSON yang valid. Seluruh field di dalam JSON akan menimpa (overwrite/merge) data yang sudah ada di database.</p>
+                      <div className="p-2 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-800/50 flex gap-2">
+                          <InfoIcon className="w-3 h-3 text-indigo-500 shrink-0 mt-0.5" />
+                          <p className="text-[8px] text-indigo-700 dark:text-indigo-300 leading-tight font-medium uppercase tracking-tight">JSON valid. Commit menimpa data yang ada.</p>
                       </div>
                   </div>
 
-                  <div className="mt-8 flex gap-4 shrink-0">
-                      <button type="button" onClick={() => setIsEditorOpen(false)} className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">Cancel</button>
+                  <div className="mt-3 flex gap-2 shrink-0">
+                      <button type="button" onClick={() => setIsEditorOpen(false)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-2xl font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all">Cancel</button>
                       <button 
                         onClick={saveDocument} 
                         disabled={saving} 
-                        className="flex-[2] py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.3em] shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
+                        className="flex-[3] py-3 bg-indigo-600 text-white rounded-2xl font-black text-[9px] uppercase tracking-[0.3em] shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
                       >
-                          {saving ? <Loader2 className="w-5 h-5 animate-spin"/> : <SaveIcon className="w-5 h-5" />} EXECUTE COMMIT
+                          {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <SaveIcon className="w-4 h-4" />} EXECUTE COMMIT
                       </button>
                   </div>
               </div>

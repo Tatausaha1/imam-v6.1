@@ -4,8 +4,6 @@
  * IMAM System - Integrated Madrasah Academic Manager
  */
 
-// Fix: Removed invalid import statement as React is not used in this types-only file
-
 export enum ViewState {
   LOGIN = 'LOGIN',
   DASHBOARD = 'DASHBOARD',
@@ -57,22 +55,114 @@ export enum UserRole {
   KETUA_KELAS = 'Ketua Kelas',
   SISWA = 'siswa',
   ORANG_TUA = 'orangtua',
+  // Added GTK role as it is used in some components
+  GTK = 'GTK'
 }
 
-export interface AppNotification {
+export interface Student {
+  id?: string;               // Database Auto-ID atau NISN
+  idUnik?: string;           // ID Lokal Sekolah
+  namaLengkap: string;
+  nisn: string;              // Digunakan untuk verifikasi klaim
+  nik?: string;
+  email?: string;
+  tingkatRombel: string;     // Relasi ke koleksi 'classes'
+  status: 'Aktif' | 'Lulus' | 'Mutasi' | 'Keluar' | 'Nonaktif';
+  jenisKelamin: 'Laki-laki' | 'Perempuan';
+  tanggalLahir?: string;     // Format YYYY-MM-DD (Kunci Verifikasi Klaim)
+  
+  // --- SCHEMA KLAIM AKUN ---
+  isClaimed: boolean;        // true jika sudah punya akun login
+  authUid?: string;          // Link ke UID Firebase Auth
+  linkedUserId?: string;     // Link ke Document ID koleksi 'users'
+  accountStatus?: 'Active' | 'Suspended';
+  // -------------------------
+
+  noTelepon?: string;
+  alamat?: string;
+  lastModified?: string;
+
+  // Fix: Added missing properties requested by StudentData component and StudentService
+  role?: string;
+  userlogin?: string;
+  tempatLahir?: string;
+  namaAyahKandung?: string;
+  namaIbuKandung?: string;
+  namaWali?: string;
+  nomorKIPP_PIP?: string;
+  kebutuhanKhusus?: string;
+  disabilitas?: string;
+  createdAt?: string;
+  lastAccountActivity?: string;
+  movedAt?: string;
+  moveReason?: string;
+}
+
+export interface UserData {
+  uid: string;
+  displayName: string;
+  email: string;
+  role: UserRole;
+  
+  // --- LINK KE DATA INDUK ---
+  studentId?: string;        // Merujuk ke Doc ID di koleksi 'students'
+  teacherId?: string;        // Merujuk ke Doc ID di koleksi 'teachers'
+  idUnik?: string;           // Mirror dari data induk
+  // -------------------------
+
+  photoURL?: string;
+  createdAt: string;
+  lastLogin: string;
+  isSso: boolean;
+}
+
+export interface ClassData {
+    id?: string;
+    name: string;
+    level: string; 
+    teacherId?: string; 
+    teacherName?: string;
+    academicYear: string;
+    // Fix: Added missing property requested by ClassList component
+    captainName?: string;
+}
+
+export type AttendanceStatus = 'Hadir' | 'Sakit' | 'Izin' | 'Alpha' | 'Haid' | 'Terlambat';
+
+export interface AttendanceRecord {
     id: string;
-    title: string;
-    message: string;
+    studentId: string;
+    studentName: string;
+    class: string;
     date: string;
-    type: 'announcement' | 'update' | 'alert';
-    sender: string;
-    isRead?: boolean;
+    status: AttendanceStatus;
+    checkIn: string | null;
+    duha: string | null;
+    zuhur: string | null;
+    ashar: string | null;
+    checkOut: string | null;
 }
 
-export interface FAQItemData {
-  question: string;
-  answer: string;
-  iconName: string;
+export interface Teacher {
+  id?: string;
+  name: string;
+  nip: string;
+  subject: string;
+  status: 'PNS' | 'PPPK' | 'GTY' | 'Honorer';
+  linkedUserId?: string;
+  // Fix: Added missing properties requested by TeacherData component
+  phone?: string;
+  email?: string;
+  birthDate?: string;
+  address?: string;
+}
+
+// Fix: Added missing interfaces requested by various components and services
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  text: string;
+  timestamp: Date;
 }
 
 export interface AboutContent {
@@ -84,101 +174,10 @@ export interface AboutContent {
   faqs: FAQItemData[];
 }
 
-export interface MadrasahData {
-  nama: string;
-  nsm: string;
-  npsn: string;
-  alamat: string;
-  telepon: string;
-  email: string;
-  website: string;
-  kepalaNama: string;
-  kepalaNip: string;
-  visi?: string;
-  misi?: string[];
-  akreditasi?: string;
-  photo?: string;
-}
-
-export interface ClassData {
-    id?: string;
-    name: string;
-    level: string; 
-    teacherId?: string; 
-    teacherName?: string;
-    academicYear: string;
-    captainId?: string;
-    captainName?: string;
-    subjects?: string[];
-}
-
-export interface Student {
-  id?: string;
-  idUnik?: string;
-  userlogin?: string;
-  namaLengkap: string;
-  nisn: string;
-  nik?: string;
-  email?: string;
-  role?: string;
-  tempatLahir?: string;
-  tanggalLahir?: string;
-  tingkatRombel: string;
-  umur?: string;
-  status: 'Aktif' | 'Lulus' | 'Mutasi' | 'Keluar' | 'Nonaktif';
-  jenisKelamin: 'Laki-laki' | 'Perempuan';
-  alamat?: string;
-  noTelepon?: string;
-  kebutuhanKhusus?: string;
-  disabilitas?: string;
-  nomorKIPP_PIP?: string;
-  namaAyahKandung?: string;
-  namaIbuKandung?: string;
-  namaWali?: string;
-  accountStatus?: string;
-  linkedUserId?: string;
-  isClaimed?: boolean;
-  authUid?: string;
-  disciplinePoints?: number;
-  createdAt?: string;
-  lastModified?: string;
-}
-
-export type AttendanceStatus = 'Hadir' | 'Sakit' | 'Izin' | 'Alpha' | 'Haid';
-
-export interface AttendanceRecord {
-    id: string;
-    studentId: string;
-    studentName: string;
-    gender?: string;
-    class: string;
-    date: string;
-    status: AttendanceStatus;
-    checkIn: string | null;
-    duha: string | null;
-    zuhur: string | null;
-    ashar: string | null;
-    checkOut: string | null;
-}
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'model';
-  text: string;
-  timestamp: Date;
-}
-
-export interface Teacher {
-  id?: string;
-  name: string;
-  nip: string;
-  subject: string;
-  status: 'PNS' | 'PPPK' | 'GTY' | 'Honorer';
-  phone?: string;
-  email?: string;
-  birthDate?: string;
-  address?: string;
-  linkedUserId?: string;
+export interface FAQItemData {
+  iconName: string;
+  question: string;
+  answer: string;
 }
 
 export type LetterStatus = 'Pending' | 'Verified' | 'Validated' | 'Signed' | 'Ditolak';
@@ -193,7 +192,6 @@ export interface LetterRequest {
   date: string;
   status: LetterStatus;
   letterNumber?: string;
-  adminNote?: string;
   verifiedBy?: string;
   verifiedAt?: string;
   validatedBy?: string;
@@ -201,6 +199,7 @@ export interface LetterRequest {
   signedBy?: string;
   signedAt?: string;
   digitalSignatureHash?: string;
+  adminNote?: string;
 }
 
 export interface StudentGrade {
@@ -213,7 +212,7 @@ export interface StudentGrade {
 }
 
 export interface JournalEntry {
-  id?: string;
+  id: string;
   teacherId: string;
   teacherName: string;
   className: string;
@@ -221,12 +220,12 @@ export interface JournalEntry {
   date: string;
   jamKe: string;
   materi: string;
-  catatan?: string;
+  catatan: string;
   createdAt?: string;
 }
 
 export interface Assignment {
-  id?: string;
+  id: string;
   title: string;
   description: string;
   subject: string;
@@ -235,8 +234,8 @@ export interface Assignment {
   teacherName: string;
   dueDate: string;
   status: 'Open' | 'Closed';
-  priority?: 'High' | 'Medium' | 'Low';
-  createdAt?: string;
+  priority: 'Low' | 'Medium' | 'High';
+  createdAt: string;
 }
 
 export interface LoginHistoryEntry {
@@ -248,23 +247,27 @@ export interface LoginHistoryEntry {
   status: 'Success' | 'Failed';
 }
 
-export interface ViolationMaster {
-  id: string;
-  category: string;
-  description: string;
-  points: number;
+export interface MadrasahData {
+  nama: string;
+  nsm: string;
+  npsn: string;
+  alamat: string;
+  telepon: string;
+  email: string;
+  website: string;
+  kepalaNama: string;
+  kepalaNip: string;
+  akreditasi: string;
+  visi: string;
+  misi: string[];
+  photo: string;
 }
 
-export interface DisciplineLog {
+export interface AppNotification {
   id: string;
-  studentId: string;
-  studentName: string;
-  type: 'Violation' | 'Reward';
-  ruleId: string;
-  ruleDescription: string;
-  points: number;
+  title: string;
+  message: string;
   date: string;
-  recordedBy: string;
-  status: 'Approved' | 'Pending' | 'Rejected';
-  note?: string;
+  type: 'announcement' | 'update' | 'alert' | 'info';
+  sender: string;
 }

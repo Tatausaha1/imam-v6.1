@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 // UI Imports - specific for this project structure
 import { db, auth, isMockMode } from '../services/firebase';
@@ -7,8 +6,7 @@ import { toast } from 'sonner';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-// Fix: Using subpath import for format to resolve module export error
-import format from 'date-fns/format';
+import { format } from 'date-fns';
 import { 
     CalendarIcon, Loader2, ChevronLeft, ChevronRight, 
     FileText, FileSpreadsheet, 

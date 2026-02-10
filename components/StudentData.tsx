@@ -4,11 +4,12 @@
  * IMAM System - Integrated Madrasah Academic Manager
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { deleteStudent, updateStudent, addStudent, moveStudentToCollection } from '../services/studentService';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { deleteStudent, updateStudent, addStudent, moveStudentToCollection, bulkImportStudents } from '../services/studentService';
 import { Student, UserRole } from '../types';
 import { db, isMockMode } from '../services/firebase';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 import Layout from './Layout';
 import { 
   UsersGroupIcon, 
@@ -21,11 +22,13 @@ import {
   EnvelopeIcon,
   CalendarIcon,
   UserIcon,
-  HeartIcon,
   ArrowRightIcon,
   AcademicCapIcon,
   BriefcaseIcon,
-  BuildingLibraryIcon
+  BuildingLibraryIcon,
+  FileSpreadsheet,
+  ArrowDownTrayIcon,
+  ArrowPathIcon
 } from './Icons';
 
 const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onBack, userRole }) => {
@@ -35,13 +38,12 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [classList, setClassList] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // State Filter
-  const [filterNama, setFilterNama] = useState('');
-  const [filterID, setFilterID] = useState('');
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [filterLevel, setFilterLevel] = useState('All');
   const [filterKelas, setFilterKelas] = useState('All'); 
-  const [filterRole, setFilterRole] = useState('All');
-  const [filterGender, setFilterGender] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
 
   const initialFormState: Partial<Student> = {
@@ -69,9 +71,9 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
 
   const [formData, setFormData] = useState<Partial<Student>>(initialFormState);
 
-  useEffect(() => {
+  const fetchClasses = async () => {
     if (isMockMode) {
-      setClassList(['X IPA 1', 'XI IPS 1', 'XII AGAMA']);
+      setClassList(['10 A', '10 B', '11 A', '11 B', '12 A', '12 B']);
       return;
     }
     if (db) {
@@ -80,9 +82,13 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
         setClassList(names);
       });
     }
-  }, []);
+  };
 
   useEffect(() => {
+    fetchClasses();
+  }, []);
+
+  const fetchStudents = () => {
     setLoading(true);
     if (!db && !isMockMode) return;
     
@@ -94,26 +100,125 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
         }, err => { setLoading(false); });
 
     if (isMockMode) {
+        // Fix: Added isClaimed property to mock data
         setStudents([
-            { id: '25002', namaLengkap: 'ADELIA SRI SUNDARI', nisn: '0086806440', idUnik: '25002', tingkatRombel: 'XII IPA 1', status: 'Aktif', jenisKelamin: 'Perempuan', role: 'Siswa', noTelepon: '08123456789' } as Student
+            { id: '25002', namaLengkap: 'ADELIA SRI SUNDARI', nisn: '0086806440', idUnik: '25002', tingkatRombel: '12 A', status: 'Aktif', jenisKelamin: 'Perempuan', role: 'Siswa', noTelepon: '08123456789', isClaimed: false } as Student,
+            { id: '25003', namaLengkap: 'AHMAD ZAKI', nisn: '0086806441', idUnik: '25003', tingkatRombel: '10 A', status: 'Aktif', jenisKelamin: 'Laki-laki', role: 'Siswa', isClaimed: false } as Student
         ]);
         setLoading(false);
     }
-    return () => unsubscribe();
+    return unsubscribe;
+  };
+
+  useEffect(() => {
+    const unsub = fetchStudents();
+    return () => { if(unsub) unsub(); };
   }, []);
+
+  // Filter rombel berdasarkan tingkat yang dipilih
+  const filteredClassOptions = useMemo(() => {
+    if (filterLevel === 'All') return classList;
+    return classList.filter(c => c.startsWith(filterLevel));
+  }, [classList, filterLevel]);
 
   const processedStudents = useMemo(() => {
     return students.filter(s => {
-        const matchesNama = filterNama === '' || (s.namaLengkap || '').toLowerCase().includes(filterNama.toLowerCase());
-        const matchesID = filterID === '' || String(s.idUnik || '').toLowerCase().includes(filterID.toLowerCase());
+        const q = globalSearch.toLowerCase().trim();
+        const matchesGlobal = q === '' || 
+            (s.namaLengkap || '').toLowerCase().includes(q) || 
+            String(s.idUnik || '').toLowerCase().includes(q);
+            
+        const matchesLevel = filterLevel === 'All' || s.tingkatRombel?.startsWith(filterLevel);
         const matchesKelas = filterKelas === 'All' || s.tingkatRombel === filterKelas;
-        const matchesRole = filterRole === 'All' || s.role === filterRole;
-        const matchesGender = filterGender === 'All' || (filterGender === 'L' ? s.jenisKelamin === 'Laki-laki' : s.jenisKelamin === 'Perempuan');
         const matchesStatus = filterStatus === 'All' || s.status === filterStatus;
         
-        return matchesNama && matchesID && matchesKelas && matchesRole && matchesGender && matchesStatus;
+        return matchesGlobal && matchesLevel && matchesKelas && matchesStatus;
     }).sort((a, b) => (a.namaLengkap || '').localeCompare(b.namaLengkap || ''));
-  }, [students, filterNama, filterID, filterKelas, filterRole, filterGender, filterStatus]);
+  }, [students, globalSearch, filterLevel, filterKelas, filterStatus]);
+
+  // --- LOGIKA EKSPOR EXCEL ---
+  const handleExportExcel = () => {
+      if (processedStudents.length === 0) {
+          toast.error("Tidak ada data untuk diekspor.");
+          return;
+      }
+
+      const toastId = toast.loading("Menyusun spreadsheet...");
+      try {
+          const exportData = processedStudents.map((s, idx) => ({
+              'NO': idx + 1,
+              'ID UNIK': s.idUnik,
+              'NAMA LENGKAP': s.namaLengkap,
+              'NISN': s.nisn,
+              'NIK': s.nik || '',
+              'ROMBEL': s.tingkatRombel,
+              'JENIS KELAMIN': s.jenisKelamin,
+              'WA/TELEPON': s.noTelepon || '',
+              'ALAMAT': s.alamat || '',
+              'TEMPAT LAHIR': s.tempatLahir || '',
+              'TANGGAL LAHIR': s.tanggalLahir || '',
+              'STATUS': s.status
+          }));
+
+          const worksheet = XLSX.utils.json_to_sheet(exportData);
+          const workbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(workbook, worksheet, "Data Siswa");
+          
+          const dateStr = new Date().toISOString().split('T')[0];
+          XLSX.writeFile(workbook, `DATABASE_SISWA_IMAM_${dateStr}.xlsx`);
+          toast.success("File Excel berhasil diunduh.", { id: toastId });
+      } catch (e) {
+          toast.error("Gagal mengekspor data.", { id: toastId });
+      }
+  };
+
+  // --- LOGIKA IMPOR EXCEL ---
+  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const toastId = toast.loading("Membaca file excel...");
+      const reader = new FileReader();
+      
+      reader.onload = async (evt) => {
+          try {
+              const bstr = evt.target?.result;
+              const wb = XLSX.read(bstr, { type: 'binary' });
+              const wsname = wb.SheetNames[0];
+              const ws = wb.Sheets[wsname];
+              const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+              if (data.length === 0) throw new Error("File kosong.");
+
+              toast.loading(`Memproses ${data.length} data siswa...`, { id: toastId });
+
+              // Fix: Added required isClaimed property to mapped students
+              const formattedStudents: Student[] = data.map(item => ({
+                  idUnik: String(item['ID UNIK'] || item['idUnik'] || '').trim(),
+                  namaLengkap: String(item['NAMA LENGKAP'] || item['namaLengkap'] || '').toUpperCase(),
+                  nisn: String(item['NISN'] || item['nisn'] || ''),
+                  nik: String(item['NIK'] || item['nik'] || ''),
+                  tingkatRombel: String(item['ROMBEL'] || item['tingkatRombel'] || ''),
+                  jenisKelamin: ((item['JENIS KELAMIN'] || item['jenisKelamin']) === 'L' ? 'Laki-laki' : 'Perempuan') as 'Laki-laki' | 'Perempuan',
+                  noTelepon: String(item['WA/TELEPON'] || item['noTelepon'] || ''),
+                  alamat: String(item['ALAMAT'] || item['alamat'] || ''),
+                  status: (item['STATUS'] || item['status'] || 'Aktif') as any,
+                  role: 'Siswa',
+                  isClaimed: false
+              })).filter(s => s.idUnik && s.namaLengkap);
+
+              if (formattedStudents.length === 0) throw new Error("Format kolom tidak sesuai. Pastikan ada kolom 'ID UNIK' dan 'NAMA LENGKAP'.");
+
+              await bulkImportStudents(formattedStudents);
+              toast.success(`Berhasil mengimpor ${formattedStudents.length} data ke database.`, { id: toastId });
+              if (fileInputRef.current) fileInputRef.current.value = '';
+          } catch (err: any) {
+              toast.error(err.message || "Gagal memproses file.", { id: toastId });
+          }
+      };
+
+      reader.readAsBinaryString(file);
+  };
 
   const handleAddNew = () => { setEditingId(null); setFormData({ ...initialFormState }); setIsModalOpen(true); };
   
@@ -190,38 +295,74 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
     <Layout title="Data Induk Siswa" subtitle="Database Terintegrasi" icon={UsersGroupIcon} onBack={onBack}>
       <div className="p-4 lg:p-6 pb-40 space-y-6">
         
-        {/* --- HEADER ACTIONS --- */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#151E32] p-4 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600"><UsersGroupIcon className="w-6 h-6" /></div>
-                <div>
-                  <h3 className="text-sm font-black uppercase tracking-tight text-slate-800 dark:text-white leading-none">Daftar Peserta Didik</h3>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">{processedStudents.length} Records Terfilter</p>
-                </div>
-            </div>
+        {/* --- NAVIGATION & SEARCH HEADER (SEGMENTED CONTROL STYLE) --- */}
+        <div className="bg-white dark:bg-[#0B1121] p-3 md:p-2 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-xl flex flex-col lg:flex-row items-center gap-4 lg:gap-2">
             
-            <div className="flex flex-wrap items-center gap-2">
-                {/* QUICK FILTER KELAS */}
-                <div className="relative group min-w-[140px]">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-500">
-                    <BuildingLibraryIcon className="w-3.5 h-3.5" />
-                  </div>
-                  <select 
-                    value={filterKelas} 
-                    onChange={e => setFilterKelas(e.target.value)} 
-                    className="w-full pl-8 pr-10 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-[10px] font-black uppercase outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all appearance-none cursor-pointer text-indigo-600"
-                  >
-                    <option value="All">Semua Kelas</option>
-                    {classList.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+            {/* LEVEL SELECTOR (OVERVIEW/EXPLORER STYLE) */}
+            <div className="flex p-1 bg-slate-100 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 w-full lg:w-fit shrink-0">
+                {['All', '10', '11', '12'].map(lvl => (
+                    <button 
+                        key={lvl}
+                        onClick={() => { setFilterLevel(lvl); setFilterKelas('All'); }}
+                        className={`flex-1 lg:flex-none px-4 md:px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${
+                            filterLevel === lvl 
+                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' 
+                            : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                        }`}
+                    >
+                        {lvl === 'All' ? 'Overview' : `Kelas ${lvl}`}
+                    </button>
+                ))}
+            </div>
+
+            {/* SEARCH BOX */}
+            <div className="relative flex-1 w-full lg:min-w-[200px]">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                    type="text" 
+                    placeholder="Search current grid..." 
+                    value={globalSearch}
+                    onChange={e => setGlobalSearch(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-900/80 border-none rounded-2xl py-3 pl-11 pr-4 text-[10px] font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white transition-all shadow-inner"
+                />
+            </div>
+
+            {/* QUICK ACTIONS */}
+            <div className="flex items-center gap-2 w-full lg:w-fit shrink-0">
+                {/* CLASS DROPDOWN SINKRONISASI */}
+                <div className="relative flex-1 lg:w-32">
+                    <select 
+                        value={filterKelas} 
+                        onChange={e => setFilterKelas(e.target.value)}
+                        className="w-full pl-3 pr-8 py-3 bg-slate-50 dark:bg-slate-900 rounded-2xl text-[10px] font-black uppercase border-none outline-none appearance-none cursor-pointer text-indigo-600 dark:text-indigo-400"
+                    >
+                        <option value="All">Rombel</option>
+                        {filteredClassOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                 </div>
 
                 {canManage && (
-                    <button onClick={handleAddNew} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 shadow-lg active:scale-95 hover:bg-indigo-700 transition-all border border-indigo-500">
-                      <PlusIcon className="w-4 h-4" /> Tambah Siswa
+                    <button 
+                        onClick={handleAddNew} 
+                        className="px-5 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 active:scale-95 transition-all"
+                    >
+                        <PlusIcon className="w-4 h-4" /> <span className="hidden sm:inline">Insert Row</span>
                     </button>
                 )}
+
+                <div className="flex gap-1">
+                    <button onClick={fetchStudents} className="p-3 bg-slate-50 dark:bg-slate-900 text-slate-500 rounded-2xl hover:text-indigo-600 active:rotate-180 transition-all duration-500" title="Refresh">
+                        <ArrowPathIcon className="w-4 h-4" />
+                    </button>
+                    <button 
+                        onClick={handleExportExcel}
+                        className="p-3 bg-slate-50 dark:bg-slate-900 text-emerald-600 rounded-2xl hover:bg-emerald-600 hover:text-white transition-all"
+                        title="Export"
+                    >
+                        <ArrowDownTrayIcon className="w-4 h-4" />
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -230,90 +371,45 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
             <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse table-fixed min-w-[1100px]">
                     <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-20">
-                        <tr className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">
-                            <th className="w-10 px-2 py-3 text-center border-b border-r border-slate-200 dark:border-slate-800">No</th>
-                            <th className="w-[160px] px-3 py-3 border-b border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 sticky left-0 z-30 text-indigo-600 dark:text-indigo-400">Nama Lengkap</th>
-                            <th className="w-24 px-2 py-3 text-center border-b border-r border-slate-200 dark:border-slate-800">ID Unik</th>
-                            <th className="w-32 px-2 py-3 text-center border-b border-r border-slate-200 dark:border-slate-800 bg-indigo-50/20 text-indigo-600">Kelas</th>
-                            <th className="w-28 px-2 py-3 text-center border-b border-r border-slate-200 dark:border-slate-800 text-emerald-600">Ponsel</th>
-                            <th className="w-28 px-2 py-3 text-center border-b border-r border-slate-200 dark:border-slate-800">Role</th>
-                            <th className="w-24 px-2 py-3 text-center border-b border-r border-slate-200 dark:border-slate-800">Gender</th>
-                            <th className="w-24 px-2 py-3 text-center border-b border-r border-slate-200 dark:border-slate-800">Status</th>
-                            {canManage && <th className="w-20 px-2 py-3 text-center border-b border-slate-200 dark:border-slate-800">Aksi</th>}
-                        </tr>
-                        {/* --- IN-TABLE FILTERS --- */}
-                        <tr className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800">
-                            <th className="border-r border-slate-200 dark:border-slate-800"></th>
-                            <th className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 sticky left-0 bg-white dark:bg-slate-800 z-30">
-                                <div className="relative">
-                                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-300" />
-                                    <input type="text" placeholder="Cari Nama..." value={filterNama} onChange={e => setFilterNama(e.target.value)} className="w-full pl-6 pr-2 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded text-[9px] font-bold outline-none focus:border-indigo-300" />
-                                </div>
-                            </th>
-                            <th className="px-2 py-2 border-r border-slate-200 dark:border-slate-800">
-                                <input type="text" placeholder="ID..." value={filterID} onChange={e => setFilterID(e.target.value)} className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded text-[9px] font-bold outline-none text-center" />
-                            </th>
-                            <th className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 bg-indigo-50/10">
-                                <select value={filterKelas} onChange={e => setFilterKelas(e.target.value)} className="w-full bg-transparent border-none rounded text-[8px] font-black uppercase text-center outline-none cursor-pointer">
-                                    <option value="All">SEMUA</option>
-                                    {classList.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                            </th>
-                            <th className="px-2 py-2 border-r border-slate-200 dark:border-slate-800"></th>
-                            <th className="px-2 py-2 border-r border-slate-200 dark:border-slate-800">
-                                <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded text-[8px] font-black uppercase text-center outline-none cursor-pointer text-indigo-600">
-                                    <option value="All">SEMUA</option>
-                                    <option value="Siswa">SISWA</option>
-                                    <option value="Ketua Kelas">KETUA KELAS</option>
-                                </select>
-                            </th>
-                            <th className="px-2 py-2 border-r border-slate-200 dark:border-slate-800">
-                                <select value={filterGender} onChange={e => setFilterGender(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded text-[8px] font-black uppercase text-center outline-none cursor-pointer">
-                                    <option value="All">ALL</option>
-                                    <option value="L">L</option>
-                                    <option value="P">P</option>
-                                </select>
-                            </th>
-                            <th className="px-2 py-2 border-r border-slate-200 dark:border-slate-800">
-                                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded text-[8px] font-black uppercase text-center outline-none cursor-pointer">
-                                    <option value="All">ALL</option>
-                                    <option value="Aktif">AKTIF</option>
-                                    <option value="Lulus">LULUS</option>
-                                    <option value="Mutasi">MUTASI</option>
-                                    <option value="Keluar">KELUAR</option>
-                                    <option value="Nonaktif">OFF</option>
-                                </select>
-                            </th>
-                            {canManage && <th className="border-r border-slate-200 dark:border-slate-800"></th>}
+                        <tr className="text-[10px] font-black text-slate-500 uppercase tracking-tighter border-b border-slate-200 dark:border-slate-800">
+                            <th className="w-10 px-2 py-4 text-center border-r border-slate-200 dark:border-slate-800">No</th>
+                            <th className="w-[180px] px-4 py-4 border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 sticky left-0 z-30 text-indigo-600 dark:text-indigo-400">Nama Lengkap</th>
+                            <th className="w-24 px-2 py-4 text-center border-r border-slate-200 dark:border-slate-800">ID Unik</th>
+                            <th className="w-32 px-2 py-4 text-center border-r border-slate-200 dark:border-slate-800 bg-indigo-50/20 text-indigo-600">Kelas</th>
+                            <th className="w-28 px-2 py-4 text-center border-r border-slate-200 dark:border-slate-800 text-emerald-600">Ponsel</th>
+                            <th className="w-28 px-2 py-4 text-center border-r border-slate-200 dark:border-slate-800">Role</th>
+                            <th className="w-24 px-2 py-4 text-center border-r border-slate-200 dark:border-slate-800">Gender</th>
+                            <th className="w-24 px-2 py-4 text-center border-r border-slate-200 dark:border-slate-800">Status</th>
+                            {canManage && <th className="w-20 px-2 py-4 text-center">Aksi</th>}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                         {loading ? (
-                            <tr><td colSpan={10} className="py-20 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-indigo-500 opacity-20" /></td></tr>
+                            <tr><td colSpan={9} className="py-20 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-indigo-500 opacity-20" /></td></tr>
                         ) : processedStudents.map((s, idx) => (
                             <tr key={s.id || s.idUnik} className="text-[10px] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                <td className="px-2 py-3 text-center border-r border-slate-200 dark:border-slate-800 text-slate-400 font-bold">{idx + 1}</td>
-                                <td className="px-3 py-3 border-r border-slate-200 dark:border-slate-800 sticky left-0 bg-white dark:bg-[#151E32] font-black text-slate-700 dark:text-slate-200 uppercase truncate">
+                                <td className="px-2 py-3.5 text-center border-r border-slate-200 dark:border-slate-800 text-slate-400 font-bold">{idx + 1}</td>
+                                <td className="px-4 py-3.5 border-r border-slate-200 dark:border-slate-800 sticky left-0 bg-white dark:bg-[#151E32] font-black text-slate-700 dark:text-slate-200 uppercase truncate shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
                                     {s.namaLengkap}
                                 </td>
-                                <td className="px-2 py-3 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-indigo-600">{s.idUnik}</td>
-                                <td className="px-2 py-3 border-r border-slate-200 dark:border-slate-800 text-center font-black text-slate-500 bg-slate-50/20">{s.tingkatRombel || '-'}</td>
-                                <td className="px-2 py-3 border-r border-slate-200 dark:border-slate-800 text-center">
+                                <td className="px-2 py-3.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-indigo-600">{s.idUnik}</td>
+                                <td className="px-2 py-3.5 border-r border-slate-200 dark:border-slate-800 text-center font-black text-slate-500 bg-slate-50/20">{s.tingkatRombel || '-'}</td>
+                                <td className="px-2 py-3.5 border-r border-slate-200 dark:border-slate-800 text-center">
                                     {s.noTelepon ? (
                                         <a href={`https://wa.me/${String(s.noTelepon).replace(/^0/, '62')}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 text-emerald-600 font-bold hover:scale-110 transition-transform">
                                             <PhoneIcon className="w-3 h-3" /> {s.noTelepon}
                                         </a>
                                     ) : '-'}
                                 </td>
-                                <td className="px-2 py-3 border-r border-slate-200 dark:border-slate-800 text-center">
+                                <td className="px-2 py-3.5 border-r border-slate-200 dark:border-slate-800 text-center">
                                     <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${s.role === 'Ketua Kelas' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-indigo-50 text-indigo-600'}`}>{s.role || 'Siswa'}</span>
                                 </td>
-                                <td className="px-2 py-3 border-r border-slate-200 dark:border-slate-800 text-center font-bold text-slate-400">{s.jenisKelamin === 'Perempuan' ? 'P' : 'L'}</td>
-                                <td className="px-2 py-3 border-r border-slate-200 dark:border-slate-800 text-center">
+                                <td className="px-2 py-3.5 border-r border-slate-200 dark:border-slate-800 text-center font-bold text-slate-400">{s.jenisKelamin === 'Perempuan' ? 'P' : 'L'}</td>
+                                <td className="px-2 py-3.5 border-r border-slate-200 dark:border-slate-800 text-center">
                                     <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${s.status === 'Aktif' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>{s.status}</span>
                                 </td>
                                 {canManage && (
-                                    <td className="px-2 py-3 text-center">
+                                    <td className="px-2 py-3.5 text-center">
                                         <div className="flex items-center justify-center gap-1.5">
                                             <button onClick={() => handleEdit(s)} className="p-1.5 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white rounded-lg transition-all shadow-sm active:scale-90" title="Koreksi Data"><PencilIcon className="w-3.5 h-3.5" /></button>
                                             <button onClick={() => handleDelete(s)} className="p-1.5 bg-rose-50 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 hover:bg-rose-600 hover:text-white rounded-lg transition-all shadow-sm active:scale-90" title="Hapus Permanen"><TrashIcon className="w-3.5 h-3.5" /></button>
@@ -325,6 +421,12 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
                     </tbody>
                 </table>
             </div>
+            {processedStudents.length === 0 && !loading && (
+                <div className="py-24 text-center opacity-30 flex flex-col items-center gap-4">
+                    <UsersGroupIcon className="w-12 h-12" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.4em]">Data Tidak Ditemukan</p>
+                </div>
+            )}
         </div>
       </div>
 
@@ -481,7 +583,6 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">Tanggal Lahir</label>
                                       <div className="relative">
                                           <CalendarIcon className="absolute left-4 top-3.5 w-4 h-4 text-slate-400" />
-                                          {/* Fix: Changed property name from 'parseInt' to 'tanggalLahir' in setFormData */}
                                           <input type="date" value={formData.tanggalLahir || ''} onChange={e => setFormData({...formData, tanggalLahir: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl py-3.5 pl-12 pr-4 text-xs font-bold shadow-sm" />
                                       </div>
                                   </div>
@@ -565,5 +666,15 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
     </Layout>
   );
 };
+
+const ReportStatCard = ({ val, label, color, bg, icon: Icon }: any) => (
+    <div className={`p-2.5 rounded-2xl text-center border border-slate-100 dark:border-slate-800 shadow-sm bg-white dark:bg-[#151E32] flex flex-col items-center justify-center`}>
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center mb-1.5 ${bg} dark:bg-opacity-10 ${color}`}>
+            <Icon className="w-3.5 h-3.5" />
+        </div>
+        <p className={`text-sm font-black ${color} tracking-tighter leading-none`}>{val}</p>
+        <p className="text-[7px] font-black text-slate-400 uppercase tracking-tighter mt-1 leading-none">{label}</p>
+    </div>
+);
 
 export default StudentData;

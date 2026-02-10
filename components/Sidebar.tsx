@@ -79,6 +79,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
         { label: 'Chat AI', icon: HeadsetIcon, view: ViewState.ADVISOR },
         { label: 'ID Digital', icon: IdentificationIcon, view: ViewState.ID_CARD },
         { label: 'User', icon: UserPlusIcon, view: ViewState.CREATE_ACCOUNT, roles: [UserRole.ADMIN, UserRole.DEVELOPER] },
+        { label: 'Dev Console', icon: CommandLineIcon, view: ViewState.DEVELOPER, roles: [UserRole.DEVELOPER] },
         { label: 'Setelan', icon: CogIcon, view: ViewState.SETTINGS },
       ]
     }
@@ -110,10 +111,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1 custom-scrollbar">
         {filteredSections.map((section, sIdx) => (
             <div key={sIdx} className="space-y-1">
-                <h3 className="px-4 text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.25em] mb-2">{section.title}</h3>
+                <h3 className="px-4 text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.25em] mb-2 mt-4 first:mt-0">{section.title}</h3>
                 {section.items.map((item, idx) => (
                     <button
                         key={idx}

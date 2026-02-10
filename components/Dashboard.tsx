@@ -1,17 +1,25 @@
+
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
  */
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ViewState, UserRole, Student, ClassData } from '../types';
 import { db, auth, isMockMode } from '../services/firebase';
 import { 
-  UsersGroupIcon, ArrowRightIcon, CheckCircleIcon, ChartBarIcon, EnvelopeIcon,
-  CalendarIcon, BookOpenIcon, BellIcon, CameraIcon, HeadsetIcon, Bars3CenterLeftIcon,
-  BriefcaseIcon, ShieldCheckIcon
+  UsersGroupIcon, QrCodeIcon, ArrowRightIcon, AcademicCapIcon, ClockIcon,
+  CheckCircleIcon, ChartBarIcon, EnvelopeIcon,
+  CalendarIcon, BookOpenIcon, BellIcon,
+  IdentificationIcon, StarIcon, BuildingLibraryIcon,
+  LogOutIcon, CameraIcon, SparklesIcon,
+  ClipboardDocumentListIcon,
+  HeartIcon, HeadsetIcon, Bars3CenterLeftIcon,
+  XMarkIcon,
+  BriefcaseIcon,
+  ShieldCheckIcon
 } from './Icons';
-import format from 'date-fns/format';
+import { format } from 'date-fns';
 
 interface DashboardProps {
   onNavigate: (view: ViewState) => void;
@@ -21,71 +29,6 @@ interface DashboardProps {
   onLogout: () => void;
   onOpenSidebar?: () => void;
 }
-
-// Move static data outside to avoid re-creation on every render
-const getQuickMenuItems = (isWaliKelas: boolean, isAdmin: boolean, isKamad: boolean) => [
-  { show: true, label: 'Jadwal', icon: CalendarIcon, view: ViewState.SCHEDULE, color: 'text-orange-600', bg: 'bg-white dark:bg-slate-800' },
-  { show: true, label: 'Scan QR', icon: CameraIcon, view: ViewState.SCANNER, color: 'text-emerald-600', bg: 'bg-white dark:bg-slate-800' },
-  { show: true, label: 'Tugas', icon: ClipboardDocumentListIcon, view: ViewState.ASSIGNMENTS, color: 'text-violet-600', bg: 'bg-white dark:bg-slate-800' },
-  { show: isWaliKelas || isAdmin || isKamad, label: 'Kelas', icon: BookOpenIcon, view: ViewState.CLASSES, color: 'text-indigo-600', bg: 'bg-white dark:bg-slate-800' },
-  { show: true, label: 'Nilai', icon: AcademicCapIcon, view: ViewState.REPORT_CARDS, color: 'text-teal-600', bg: 'bg-white dark:bg-slate-800' },
-  { show: true, label: 'Surat', icon: EnvelopeIcon, view: ViewState.LETTERS, color: 'text-sky-600', bg: 'bg-white dark:bg-slate-800' },
-  { show: true, label: 'Database', icon: ChartBarIcon, view: ViewState.REPORTS, color: 'text-slate-600', bg: 'bg-white dark:bg-slate-800' },
-  { show: true, label: 'AI Chat', icon: HeadsetIcon, view: ViewState.ADVISOR, color: 'text-indigo-600', bg: 'bg-white dark:bg-slate-800' }
-];
-
-const ClipboardDocumentListIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-  </svg>
-);
-
-const AcademicCapIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 0 0-.491 6.347A48.627 48.627 0 0 1 12 20.904a48.627 48.627 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.57 50.57 0 0 0-2.658-.813A59.905 59.905 0 0 1 12 3.493a59.902 59.902 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75" />
-  </svg>
-);
-
-// Memoized Stat Component to prevent unnecessary renders
-const StatCardSmall = React.memo(({ label, val, icon: Icon, color, bg, onPress }: any) => (
-    <div onClick={onPress} className="min-w-[140px] snap-center bg-white dark:bg-[#151E32] p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between active:scale-95 transition-transform cursor-pointer will-change-transform">
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${bg} ${color}`}>
-            <Icon className="w-5 h-5" />
-        </div>
-        <div className="mt-6">
-            <h3 className="text-xl font-black text-slate-900 dark:text-white leading-none">{val}</h3>
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1.5">{label}</p>
-        </div>
-    </div>
-));
-
-const MiniSessionTracker = React.memo(({ data }: { data: any }) => {
-    const sessions = [
-        { key: 'checkIn', label: 'M' },
-        { key: 'duha', label: 'D' },
-        { key: 'zuhur', label: 'Z' },
-        { key: 'ashar', label: 'A' },
-        { key: 'checkOut', label: 'P' }
-    ];
-    return (
-        <div className="flex gap-1.5 mt-3">
-            {sessions.map(s => {
-                const val = data ? data[s.key] : null;
-                const isHaid = val && String(val).includes('Haid');
-                const isFilled = !!val;
-                return (
-                    <div key={s.key} className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black border transition-all ${
-                        isFilled 
-                        ? (isHaid ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-emerald-50 border-emerald-200 text-emerald-600') 
-                        : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-300'
-                    }`}>
-                        {s.label}
-                    </div>
-                );
-            })}
-        </div>
-    );
-});
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout }) => {
   const [userName, setUserName] = useState<string>('Pengguna');
@@ -108,14 +51,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
   const [loadingStats, setLoadingStats] = useState(true);
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const isStudent = userRole === UserRole.SISWA;
+  const isWaliKelas = userRole === UserRole.WALI_KELAS;
   const isAdmin = userRole === UserRole.ADMIN || userRole === UserRole.DEVELOPER;
   const isKamad = userRole === UserRole.KEPALA_MADRASAH;
-  const isWaliKelas = userRole === UserRole.WALI_KELAS;
-  const isStudent = userRole === UserRole.SISWA;
   const isTeacher = userRole === UserRole.GURU || isWaliKelas;
-  const isStaffAction = isAdmin || isTeacher || userRole === UserRole.STAF || userRole === UserRole.KETUA_KELAS;
-
-  const quickMenuItems = useMemo(() => getQuickMenuItems(isWaliKelas, isAdmin, isKamad), [isWaliKelas, isAdmin, isKamad]);
+  
+  const isStaffAction = 
+    isAdmin || 
+    isTeacher || 
+    userRole === UserRole.STAF || 
+    userRole === UserRole.KETUA_KELAS;
 
   useEffect(() => {
     if (!auth?.currentUser && !isMockMode) return;
@@ -123,9 +71,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
     if (isMockMode) {
         setHasNewNotifications(true);
     } else if (db) {
-        db.collection('announcements').limit(1).get().then(snap => {
-            if (!snap.empty) setHasNewNotifications(true);
-        }).catch(() => {});
+        db.collection('announcements').limit(1).get()
+            .then(snap => {
+                if (!snap.empty) setHasNewNotifications(true);
+            })
+            .catch(() => {});
     }
 
     const fetchAllData = async () => {
@@ -142,7 +92,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
                     setClassAttendancePct(96);
                 }
                 setLoadingStats(false);
-            }, 300); // Faster mock load
+            }, 500);
             return;
         }
 
@@ -230,6 +180,45 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
       }
   }, []);
 
+  const quickMenuItems = [
+    { show: true, label: 'Jadwal', icon: CalendarIcon, view: ViewState.SCHEDULE, color: 'text-orange-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Scan QR', icon: CameraIcon, view: ViewState.SCANNER, color: 'text-emerald-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Tugas', icon: ClipboardDocumentListIcon, view: ViewState.ASSIGNMENTS, color: 'text-violet-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: isWaliKelas || isAdmin || isKamad, label: 'Kelas', icon: BookOpenIcon, view: ViewState.CLASSES, color: 'text-indigo-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Nilai', icon: AcademicCapIcon, view: ViewState.REPORT_CARDS, color: 'text-teal-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Surat', icon: EnvelopeIcon, view: ViewState.LETTERS, color: 'text-sky-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Database', icon: ChartBarIcon, view: ViewState.REPORTS, color: 'text-slate-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'AI Chat', icon: HeadsetIcon, view: ViewState.ADVISOR, color: 'text-indigo-600', bg: 'bg-white dark:bg-slate-800' }
+  ];
+
+  const MiniSessionTracker = ({ data }: { data: any }) => {
+    const sessions = [
+        { key: 'checkIn', label: 'M' },
+        { key: 'duha', label: 'D' },
+        { key: 'zuhur', label: 'Z' },
+        { key: 'ashar', label: 'A' },
+        { key: 'checkOut', label: 'P' }
+    ];
+    return (
+        <div className="flex gap-1.5 mt-3">
+            {sessions.map(s => {
+                const val = data ? data[s.key] : null;
+                const isHaid = val && String(val).includes('Haid');
+                const isFilled = !!val;
+                return (
+                    <div key={s.key} className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black border transition-all ${
+                        isFilled 
+                        ? (isHaid ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-emerald-50 border-emerald-200 text-emerald-600') 
+                        : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-300'
+                    }`}>
+                        {s.label}
+                    </div>
+                );
+            })}
+        </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#f8fafc] dark:bg-[#020617] overflow-hidden transition-colors">
       
@@ -247,14 +236,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
           <div className="flex gap-2">
              <button 
                 onClick={() => onNavigate(ViewState.NOTIFICATIONS)}
-                className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-500 relative active:scale-90 transition-transform"
+                className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-500 relative"
              >
                 <BellIcon className="w-5 h-5" />
                 {hasNewNotifications && <span className="absolute top-3 right-3 h-2 w-2 rounded-full bg-rose-600 ring-2 ring-white dark:ring-slate-800"></span>}
              </button>
              <button 
                 onClick={() => onNavigate(ViewState.ALL_FEATURES)}
-                className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none active:scale-90 transition-transform"
+                className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none"
              >
                 <Bars3CenterLeftIcon className="w-5 h-5" />
              </button>
@@ -262,15 +251,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto scroll-smooth custom-scrollbar">
-        <div className="max-w-7xl mx-auto px-5 py-6 space-y-8 pb-32 content-visibility-auto">
+      <main className="flex-1 overflow-y-auto scroll-smooth">
+        <div className="max-w-7xl mx-auto px-5 py-6 space-y-8 pb-32">
             
             {/* --- STATS CARDS --- */}
             <section className="space-y-3">
                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Laporan Singkat</h3>
-                <div className="flex overflow-x-auto gap-4 pb-2 scrollbar-hide -mx-2 px-2 snap-x">
+                <div 
+                    ref={scrollRef}
+                    className="flex overflow-x-auto gap-4 pb-2 scrollbar-hide -mx-2 px-2 snap-x"
+                >
                     {isWaliKelas && managedClass && (
-                        <div onClick={() => onNavigate(ViewState.CLASSES)} className="min-w-[260px] snap-center bg-indigo-600 rounded-3xl p-6 text-white shadow-lg cursor-pointer transition-transform active:scale-95 will-change-transform">
+                        <div onClick={() => onNavigate(ViewState.CLASSES)} className="min-w-[260px] snap-center bg-indigo-600 rounded-3xl p-6 text-white shadow-lg cursor-pointer transition-transform active:scale-95">
                             <p className="text-[9px] font-black uppercase tracking-widest opacity-70 mb-1">Rombel Binaan</p>
                             <h3 className="text-lg font-black">{managedClass.name}</h3>
                             <div className="mt-8 flex items-end justify-between">
@@ -284,7 +276,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
                     )}
 
                     {isStudent && (
-                        <div onClick={() => onNavigate(ViewState.ATTENDANCE_HISTORY)} className="min-w-[260px] snap-center bg-emerald-600 rounded-3xl p-6 text-white shadow-lg cursor-pointer transition-transform active:scale-95 will-change-transform">
+                        <div onClick={() => onNavigate(ViewState.ATTENDANCE_HISTORY)} className="min-w-[260px] snap-center bg-emerald-600 rounded-3xl p-6 text-white shadow-lg cursor-pointer transition-transform active:scale-95">
                             <p className="text-[9px] font-black uppercase tracking-widest opacity-70 mb-1">Status Kehadiran</p>
                             <h3 className="text-lg font-black">{todayAttendance ? todayAttendance.status : 'Belum Absen'}</h3>
                             <MiniSessionTracker data={todayAttendance} />
@@ -318,7 +310,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Menu Utama</h3>
                 <div className="grid grid-cols-4 gap-4">
                     {quickMenuItems.map((item, idx) => item.show && (
-                        <button key={idx} onClick={() => onNavigate(item.view)} className="flex flex-col items-center gap-2 group transition-all active:scale-90 will-change-transform">
+                        <button key={idx} onClick={() => onNavigate(item.view)} className="flex flex-col items-center gap-2 group transition-all active:scale-90">
                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border border-slate-100 dark:border-slate-800 shadow-sm ${item.bg}`}>
                                 <item.icon className={`w-6 h-6 ${item.color}`} />
                             </div>
@@ -332,7 +324,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
             <section className="space-y-3">
                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Jadwal Aktif</h3>
                 <div className="bg-white dark:bg-[#151E32] rounded-3xl p-5 shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-5">
-                    <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-2xl flex flex-col items-center justify-center shrink-0 shadow-inner">
+                    <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-2xl flex flex-col items-center justify-center shrink-0">
                         <span className="text-xs font-black text-slate-800 dark:text-white">07:30</span>
                         <div className="w-4 h-0.5 bg-indigo-500 mt-1 rounded-full"></div>
                     </div>
@@ -350,7 +342,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
             <section className="mt-4">
                 <div 
                     onClick={() => onNavigate(ViewState.ABOUT)}
-                    className="bg-slate-900 dark:bg-indigo-950 rounded-[2.5rem] p-6 flex items-center gap-5 cursor-pointer active:scale-[0.98] transition-all border border-slate-800 shadow-xl will-change-transform"
+                    className="bg-slate-900 dark:bg-indigo-950 rounded-[2.5rem] p-6 flex items-center gap-5 cursor-pointer active:scale-[0.98] transition-all border border-slate-800 shadow-xl"
                 >
                     <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shrink-0 shadow-lg">
                         <ShieldCheckIcon className="w-6 h-6 text-white" />
@@ -372,9 +364,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
         </div>
       </main>
 
+      {/* Floating Button (Minimal) */}
       <button 
         onClick={() => onNavigate(ViewState.ADVISOR)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-xl flex items-center justify-center active:scale-90 z-40 transition-transform will-change-transform"
+        className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-xl flex items-center justify-center active:scale-90 z-40"
       >
         <HeadsetIcon className="w-6 h-6" />
       </button>
@@ -382,4 +375,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
   );
 };
 
-export default React.memo(Dashboard);
+const StatCardSmall = ({ label, val, icon: Icon, color, bg, onPress }: any) => (
+    <div onClick={onPress} className="min-w-[140px] snap-center bg-white dark:bg-[#151E32] p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between active:scale-95 transition-transform">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${bg} ${color}`}>
+            <Icon className="w-5 h-5" />
+        </div>
+        <div className="mt-6">
+            <h3 className="text-xl font-black text-slate-900 dark:text-white leading-none">{val}</h3>
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1.5">{label}</p>
+        </div>
+    </div>
+);
+
+export default Dashboard;

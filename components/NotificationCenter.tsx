@@ -13,8 +13,7 @@ import {
 } from './Icons';
 import { db, isMockMode } from '../services/firebase';
 import { AppNotification } from '../types';
-// Fix: Using subpath import for format to resolve module export error
-import format from 'date-fns/format';
+import { format } from 'date-fns';
 import { id as localeID } from 'date-fns/locale/id';
 
 interface NotificationCenterProps {
