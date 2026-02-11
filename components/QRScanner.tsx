@@ -94,14 +94,31 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
 
     if (session === 'Luar Sesi') {
         try {
-            let studentName = "Siswa Tidak Dikenal";
+            let studentName = "Identitas Tidak Dikenal";
+            let found = false;
+
             if (!isMockMode && db) {
+                // --- LOGIKA PENCARIAN BERLAPIS (SEARCH ENGINE) ---
                 const studentDoc = await db.collection('students').doc(cleanCode).get();
                 if (studentDoc.exists) {
                     studentName = studentDoc.data()?.namaLengkap || studentName;
+                    found = true;
+                } else {
+                    const idUnikQuery = await db.collection('students').where('idUnik', '==', cleanCode).limit(1).get();
+                    if (!idUnikQuery.empty) {
+                        studentName = idUnikQuery.docs[0].data()?.namaLengkap || studentName;
+                        found = true;
+                    } else {
+                        const nisnQuery = await db.collection('students').where('nisn', '==', cleanCode).limit(1).get();
+                        if (!nisnQuery.empty) {
+                            studentName = nisnQuery.docs[0].data()?.namaLengkap || studentName;
+                            found = true;
+                        }
+                    }
                 }
             } else if (isMockMode) {
                 studentName = "Siswa Simulasi (Read-Only)";
+                found = true;
             }
 
             playBeep();
@@ -113,7 +130,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onBack }) => {
                 id: cleanCode,
                 name: studentName,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                status: "SESI TIDAK AKTIF",
+                status: found ? "SESI TIDAK AKTIF" : "DATA TIDAK DITEMUKAN",
                 isReadOnly: true
             };
 

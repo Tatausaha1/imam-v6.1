@@ -36,6 +36,7 @@ const getActiveSessionConfig = async () => {
 };
 
 export const recordAttendanceByScan = async (rawCode: string, session: AttendanceSession, isHaid: boolean = false): Promise<ScanResult> => {
+    // Normalisasi kode (Hapus karakter kontrol tersembunyi dari scanner hardware)
     const code = String(rawCode || '').replace(/[\x00-\x1F\x7F-\x9F]/g, "").trim();
     if (!code) return { success: false, message: "ID KOSONG" };
 
@@ -64,7 +65,6 @@ export const recordAttendanceByScan = async (rawCode: string, session: Attendanc
 
     const isPrayerSession = ['Duha', 'Zuhur', 'Ashar'].includes(session);
     
-    // FORMAT PENYIMPANAN TERPADU: HH:mm:ss | [META]
     let nowValue = nowFull;
     let meta = "";
 
@@ -90,18 +90,34 @@ export const recordAttendanceByScan = async (rawCode: string, session: Attendanc
 
     try {
         let studentData: Student | null = null;
-        const studentRef = db.collection(COLLECTION_STUDENTS).doc(code);
-        const studentSnap = await studentRef.get();
+        
+        // --- LOGIKA PENCARIAN BERLAPIS (MULTI-IDENTIFIER) ---
+        
+        // 1. PRIORITAS UTAMA: Cari berdasarkan Document ID (Sangat Cepat)
+        const studentRefById = db.collection(COLLECTION_STUDENTS).doc(code);
+        const studentSnap = await studentRefById.get();
         
         if (studentSnap.exists) {
             studentData = { id: studentSnap.id, ...studentSnap.data() } as Student;
         } else {
-            const query = await db.collection(COLLECTION_STUDENTS).where('idUnik', '==', code).limit(1).get();
-            if (!query.empty) studentData = { id: query.docs[0].id, ...query.docs[0].data() } as Student;
+            // 2. PRIORITAS KEDUA: Cari berdasarkan field 'idUnik'
+            const idUnikQuery = await db.collection(COLLECTION_STUDENTS).where('idUnik', '==', code).limit(1).get();
+            if (!idUnikQuery.empty) {
+                const doc = idUnikQuery.docs[0];
+                studentData = { id: doc.id, ...doc.data() } as Student;
+            } else {
+                // 3. PRIORITAS TERAKHIR: Cari berdasarkan field 'nisn'
+                const nisnQuery = await db.collection(COLLECTION_STUDENTS).where('nisn', '==', code).limit(1).get();
+                if (!nisnQuery.empty) {
+                    const doc = nisnQuery.docs[0];
+                    studentData = { id: doc.id, ...doc.data() } as Student;
+                }
+            }
         }
 
-        if (!studentData) return { success: false, message: `ID "${code}" TIDAK ADA` };
+        if (!studentData) return { success: false, message: `ID "${code}" TIDAK TERDAFTAR` };
 
+        // Pastikan kita menggunakan Document ID asli untuk primary key absensi
         const attendanceId = `${studentData.id}_${today}`;
         const attendanceRef = db.collection(COLLECTION_ATTENDANCE).doc(attendanceId);
         const docSnapshot = await attendanceRef.get();
@@ -115,13 +131,12 @@ export const recordAttendanceByScan = async (rawCode: string, session: Attendanc
             studentId: studentData.id,
             studentName: studentData.namaLengkap,
             class: studentData.tingkatRombel,
-            idUnik: studentData.idUnik || code,
+            idUnik: studentData.idUnik || studentData.nisn || code,
             date: today,
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
             [fieldName]: nowValue
         };
 
-        // Update status umum
         if (meta === "H") {
             updatePayload.status = 'Haid';
         } else if (!currentData?.status || currentData.status === 'Alpha' || currentData.status === 'Hadir') {
@@ -136,6 +151,7 @@ export const recordAttendanceByScan = async (rawCode: string, session: Attendanc
             student: studentData 
         };
     } catch (error: any) {
-        return { success: false, message: "ERROR DATABASE" };
+        console.error("Attendance Error:", error);
+        return { success: false, message: "ERROR ENGINE DATABASE" };
     }
 };

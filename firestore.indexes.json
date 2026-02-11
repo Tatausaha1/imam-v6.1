@@ -28,6 +28,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "students",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "idUnik",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "namaLengkap",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
