@@ -1,64 +1,22 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
 
-    // --- FUNGSI PEMBANTU ---
-    
-    function isSignedIn() {
-      return request.auth != null;
-    }
-    
-    function getUser() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && (getUser().role in ['admin', 'developer']);
-    }
-
-    // --- ATURAN KOLEKSI ---
-
-    // Koleksi Pengguna
-    match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow delete: if isAdmin();
-    }
-
-    // Koleksi Siswa
     match /students/{studentId} {
-      allow get: if true; // Untuk pengecekan NISN saat registrasi
-      allow list, read: if isSignedIn();
-      // Izinkan Admin/Staf atau Siswa itu sendiri saat melakukan klaim akun
-      allow write: if isAdmin() || 
-                    (isSignedIn() && (getUser().role in ['Staf', 'Guru', 'Wali Kelas'])) ||
-                    (isSignedIn() && request.resource.data.linkedUserId == request.auth.uid);
+      allow get: if true; // Untuk pendaftaran/scan cepat
+      allow list, read: if isSignedIn(); // Dibutuhkan untuk query where(idUnik)
+      allow write: if isSignedIn();
     }
 
-    // Koleksi Presensi
     match /attendance/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn(); 
+      allow read, write: if isSignedIn();
     }
 
-    // Aturan Umum untuk Koleksi Akademik (Read: All Signed In, Write: Admin Only)
-    match /teachers/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
-    match /classes/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
-    match /academic_years/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
-    match /letters/{docId} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
-    match /announcements/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
-    match /journals/{docId} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
-    match /assignments/{docId} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
-    match /grades/{docId} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
-    match /settings/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
-    match /about_content/{docId} { allow read: if isSignedIn(); allow write: if isAdmin(); }
-    match /login_logs/{docId} { allow read, write: if isSignedIn(); }
-
-    // Fallback untuk subkoleksi atau koleksi baru
     match /{document=**} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isSignedIn();
     }
   }
 }

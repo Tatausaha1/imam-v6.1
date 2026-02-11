@@ -202,7 +202,7 @@ const App: React.FC = () => {
   const renderViewContent = () => {
     switch (currentView) {
       case ViewState.LOGIN: return <Login onLogin={handleLoginSuccess} />;
-      case ViewState.DASHBOARD: return <Dashboard onNavigate={handleNavigate} isDarkMode={isDarkTheme} onToggleTheme={toggleTheme} userRole={userRole} onLogout={handleLogout} />;
+      case ViewState.DASHBOARD: return <Dashboard onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />;
       case ViewState.PROFILE: return <Profile onBack={handleBack} onLogout={handleLogout} />;
       case ViewState.SCHEDULE: return <Schedule onBack={handleBack} />;
       case ViewState.ALL_FEATURES: return <AllFeatures onBack={handleBack} onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />;
@@ -259,14 +259,14 @@ const App: React.FC = () => {
   const isLoginPage = currentView === ViewState.LOGIN;
 
   return (
-    <div className={`h-screen w-full flex flex-col relative overflow-hidden ${isDarkTheme ? 'bg-[#020617]' : 'bg-[#f8fafc]'} transition-colors duration-500`}>
+    <div className={`min-h-screen w-full flex flex-col relative transition-colors duration-500 ${isDarkTheme ? 'bg-[#020617]' : 'bg-[#f8fafc]'}`}>
         {isLoginPage ? (
             <Suspense fallback={<PageLoader />}>
                 {renderViewContent()}
             </Suspense>
         ) : (
-            <div className="h-full w-full relative flex overflow-hidden">
-                {/* Desktop Sidebar (Always on Large Screens) */}
+            <div className="h-screen w-full relative flex overflow-hidden">
+                {/* Desktop Sidebar */}
                 <div className="hidden lg:block w-72 shrink-0 h-full border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-[#0B1121] z-40">
                     <Sidebar currentView={currentView} onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />
                 </div>
@@ -281,9 +281,9 @@ const App: React.FC = () => {
                         </Suspense>
                     </div>
                     
-                    {/* Mobile Dock (Hidden on Large screens) */}
+                    {/* Mobile Dock */}
                     <div className="shrink-0 z-40 lg:hidden">
-                        <BottomNav currentView={currentView} onNavigate={handleNavigate} userRole={userRole} />
+                        <BottomNav currentView={currentView} onNavigate={handleNavigate} />
                     </div>
                 </div>
             </div>
