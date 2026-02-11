@@ -21,6 +21,20 @@ import {
 } from './Icons';
 import { format } from 'date-fns';
 
+const DASHBOARD_CACHE_TTL_MS = 60 * 1000;
+
+let dashboardDataCache: {
+  key: string;
+  fetchedAt: number;
+  payload: {
+    stats: { students: number; teachers: number; classes: number; pendingLetters: number; attendanceToday: number; };
+    maleStudents: number;
+    femaleStudents: number;
+    classAttendancePct: number;
+    managedClass: ClassData | null;
+  };
+} | null = null;
+
 interface DashboardProps {
   onNavigate: (view: ViewState) => void;
   isDarkMode: boolean;
@@ -81,6 +95,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
     const fetchAllData = async () => {
         setLoadingStats(true);
         const uid = auth?.currentUser?.uid;
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const cacheKey = `${uid || 'guest'}:${userRole}:${todayStr}`;
 
         if (isMockMode) {
             setTimeout(() => {
@@ -97,8 +113,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
         }
 
         if (!db || !uid) return;
+
+        const now = Date.now();
+        if (dashboardDataCache && dashboardDataCache.key === cacheKey && (now - dashboardDataCache.fetchedAt) < DASHBOARD_CACHE_TTL_MS) {
+            setStats(dashboardDataCache.payload.stats);
+            setMaleStudents(dashboardDataCache.payload.maleStudents);
+            setFemaleStudents(dashboardDataCache.payload.femaleStudents);
+            setManagedClass(dashboardDataCache.payload.managedClass);
+            setClassAttendancePct(dashboardDataCache.payload.classAttendancePct);
+            setLoadingStats(false);
+            return;
+        }
+
         try {
-            const todayStr = format(new Date(), 'yyyy-MM-dd');
             const [studentsSnap, teachersSnap, classesSnap] = await Promise.all([
                 db.collection('students').where('status', '==', 'Aktif').get(),
                 db.collection('teachers').get(),
@@ -114,49 +141,57 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
                     db.collection('attendance').where('date', '==', todayStr).get(),
                     db.collection('letters').where('status', '==', 'Pending').get()
                 ]);
-                
-                setStats({ 
-                    students: studentsSnap.size, 
-                    teachers: teachersSnap.size, 
-                    classes: classesSnap.size, 
-                    pendingLetters: lettersSnap.size, 
-                    attendanceToday: attendanceTodaySnap.size 
-                });
             } else {
                 [attendanceTodaySnap, lettersSnap] = await Promise.all([
                     db.collection('attendance').where('date', '==', todayStr).where('studentId', '==', uid).get(),
                     db.collection('letters').where('userId', '==', uid).where('status', '==', 'Pending').get()
                 ]);
-                
-                setStats({ 
-                    students: studentsSnap.size, 
-                    teachers: teachersSnap.size, 
-                    classes: classesSnap.size, 
-                    pendingLetters: lettersSnap.size, 
-                    attendanceToday: 0 
-                });
             }
 
-            const myAtt = attendanceTodaySnap.docs.find(d => d.data().studentId === uid || d.data().idUnik === userIdUnik);
-            if (myAtt) setTodayAttendance(myAtt.data());
+            const nextStats = {
+                students: studentsSnap.size,
+                teachers: teachersSnap.size,
+                classes: classesSnap.size,
+                pendingLetters: lettersSnap.size,
+                attendanceToday: (isStaffAction || isKamad) ? attendanceTodaySnap.size : 0
+            };
+
+            let nextManagedClass: ClassData | null = null;
+            let nextMaleStudents = sDocs.filter(d => d.jenisKelamin === 'Laki-laki').length;
+            let nextFemaleStudents = sDocs.filter(d => d.jenisKelamin === 'Perempuan').length;
+            let nextClassAttendancePct = 0;
 
             if (isWaliKelas) {
                 const myClassDoc = classesSnap.docs.find(d => d.data().teacherId === uid);
                 if (myClassDoc) {
-                    const classData = { id: myClassDoc.id, ...myClassDoc.data() } as ClassData;
-                    setManagedClass(classData);
-                    const classStudents = sDocs.filter(s => s.tingkatRombel === classData.name);
-                    const classAttendanceCount = attendanceTodaySnap ? attendanceTodaySnap.docs.filter(d => d.data().class === classData.name).length : 0;
-                    setMaleStudents(classStudents.filter(s => s.jenisKelamin === 'Laki-laki').length);
-                    setFemaleStudents(classStudents.filter(s => s.jenisKelamin === 'Perempuan').length);
+                    nextManagedClass = { id: myClassDoc.id, ...myClassDoc.data() } as ClassData;
+                    const classStudents = sDocs.filter(s => s.tingkatRombel === nextManagedClass?.name);
+                    const classAttendanceCount = attendanceTodaySnap.docs.filter(d => d.data().class === nextManagedClass?.name).length;
+                    nextMaleStudents = classStudents.filter(s => s.jenisKelamin === 'Laki-laki').length;
+                    nextFemaleStudents = classStudents.filter(s => s.jenisKelamin === 'Perempuan').length;
                     if (classStudents.length > 0) {
-                        setClassAttendancePct(Math.round((classAttendanceCount / classStudents.length) * 100));
+                        nextClassAttendancePct = Math.round((classAttendanceCount / classStudents.length) * 100);
                     }
                 }
-            } else {
-                setMaleStudents(sDocs.filter(d => d.jenisKelamin === 'Laki-laki').length);
-                setFemaleStudents(sDocs.filter(d => d.jenisKelamin === 'Perempuan').length);
             }
+
+            setStats(nextStats);
+            setManagedClass(nextManagedClass);
+            setMaleStudents(nextMaleStudents);
+            setFemaleStudents(nextFemaleStudents);
+            setClassAttendancePct(nextClassAttendancePct);
+
+            dashboardDataCache = {
+                key: cacheKey,
+                fetchedAt: now,
+                payload: {
+                    stats: nextStats,
+                    maleStudents: nextMaleStudents,
+                    femaleStudents: nextFemaleStudents,
+                    managedClass: nextManagedClass,
+                    classAttendancePct: nextClassAttendancePct
+                }
+            };
         } catch (e: any) { 
             console.error("Dashboard Error:", e.message); 
         } finally { 
@@ -164,7 +199,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onLogout })
         }
     };
     fetchAllData();
-  }, [userIdUnik, userRole, isWaliKelas, isStaffAction, isKamad]);
+  }, [userRole, isWaliKelas, isStaffAction, isKamad]);
+
+  useEffect(() => {
+      const uid = auth?.currentUser?.uid;
+      if (!uid || !db || isMockMode) return;
+
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const attendanceRef = db.collection('attendance');
+      const query = userIdUnik
+        ? attendanceRef.where('date', '==', todayStr).where('idUnik', '==', userIdUnik).limit(1)
+        : attendanceRef.where('date', '==', todayStr).where('studentId', '==', uid).limit(1);
+
+      query
+        .get()
+        .then((snap) => {
+          if (!snap.empty) setTodayAttendance(snap.docs[0].data());
+        })
+        .catch(() => {});
+  }, [userIdUnik]);
 
   useEffect(() => {
       if (auth.currentUser) {
