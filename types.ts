@@ -133,14 +133,16 @@ export interface AttendanceRecord {
     id: string;
     studentId: string;
     studentName: string;
-    class: string;
-    date: string;
+    class: string;        // Konsisten dengan tingkatRombel di Student
+    date: string;         // YYYY-MM-DD
+    month: string;        // YYYY-MM (Tambahkan ini! Sangat penting untuk Laporan Bulanan)
     status: AttendanceStatus;
     checkIn: string | null;
     duha: string | null;
     zuhur: string | null;
     ashar: string | null;
     checkOut: string | null;
+    semester?: string;    // Ganjil/Genap (Penting untuk laporan akademik)
 }
 
 export interface Teacher {
