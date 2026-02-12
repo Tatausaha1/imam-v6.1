@@ -1,4 +1,3 @@
-
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -14,9 +13,10 @@ if (!rootElement) {
 }
 
 // Registrasi Service Worker untuk Fitur Instalasi (PWA)
+// Folder public akan dipindahkan ke root '/' saat build di Vercel/Vite
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/public/service-worker.js')
+    navigator.serviceWorker.register('/service-worker.js')
       .then(reg => console.log('IMAM PWA: Service Worker Registered'))
       .catch(err => console.log('IMAM PWA: Service Worker Registration Failed', err));
   });
