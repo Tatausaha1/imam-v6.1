@@ -261,8 +261,8 @@ const App: React.FC = () => {
 
   return (
     <MobileContainer isDarkTheme={isDarkTheme} viewMode={viewMode} onViewModeChange={changeViewMode}>
-        <div className="h-screen w-full relative flex overflow-hidden">
-            {/* Desktop Sidebar (Tampilkan hanya di mode full) */}
+        <div className="h-full w-full relative flex overflow-hidden">
+            {/* Desktop Sidebar */}
             {viewMode === 'full' && (
                 <div className="hidden lg:block w-72 shrink-0 h-full border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-[#0B1121] z-40">
                     <Sidebar currentView={currentView} onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />
@@ -270,7 +270,7 @@ const App: React.FC = () => {
             )}
             
             <div className="flex-1 flex flex-col h-full w-full relative overflow-hidden bg-[#f8fafc] dark:bg-[#020617]">
-                <div className="flex-1 overflow-hidden relative z-10">
+                <div className="flex-1 overflow-hidden relative z-10 h-full w-full">
                     <Suspense fallback={<PageLoader />}>
                         <div key={viewKey} className="h-full w-full relative">
                             {renderViewContent()}
@@ -278,8 +278,8 @@ const App: React.FC = () => {
                     </Suspense>
                 </div>
                 
-                {/* Mobile Dock (Sembunyikan jika di layar besar dan mode full) */}
-                <div className={`shrink-0 z-40 ${viewMode === 'full' ? 'lg:hidden' : ''}`}>
+                {/* Mobile Dock */}
+                <div className={`shrink-0 z-40 relative ${viewMode === 'full' ? 'lg:hidden' : ''}`}>
                     <BottomNav currentView={currentView} onNavigate={handleNavigate} />
                 </div>
             </div>
