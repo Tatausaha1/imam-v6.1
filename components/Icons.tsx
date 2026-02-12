@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface IconProps {
@@ -325,12 +324,12 @@ export const InfoIcon = ({ className }: IconProps) => (
   </svg>
 );
 
-// Memperbarui AppLogo untuk menggunakan gambar logo resmi dari Google Drive tanpa frame tambahan
+// Menggunakan logo dari Google Drive untuk branding V6.2
 export const AppLogo = ({ className }: IconProps) => (
   <img 
-    src="https://lh3.googleusercontent.com/d/1sdrClACEeaennb0J6dekMwTOKXob5NnQ" 
+    src="https://lh3.googleusercontent.com/d/1RGCXWnp19Y3UJe7cUWy-krY6S2KQmt9K" 
     className={`${className} w-full h-full object-contain`} 
-    alt="IMAM V6.1 Logo" 
+    alt="IMAM System Logo" 
   />
 );
 

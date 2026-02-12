@@ -107,12 +107,15 @@ const QRScanner: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             type: 'success'
         });
 
+        // Async record without blocking UI flow
         recordAttendanceByScan(code, session as AttendanceSession, isHaidMode).catch(() => {});
     }
 
+    // REDUCED TIMEOUT FOR FASTER FLOW (2000ms -> 800ms)
     setTimeout(() => { 
-        setLastScanned(null); isLocked.current = false; 
-    }, 2000);
+        setLastScanned(null); 
+        isLocked.current = false; 
+    }, 800);
   }, [session, isHaidMode]);
 
   useEffect(() => {
@@ -148,7 +151,10 @@ const QRScanner: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       scannerRef.current = html5QrCode;
       await html5QrCode.start(
           { facingMode: mode }, 
-          { fps: 30, qrbox: (w, h) => { const s = Math.min(w, h) * 0.8; return { width: s, height: s }; } }, 
+          { 
+              fps: 60, // INCREASED FPS FROM 30 TO 60 FOR FASTER DETECTION
+              qrbox: (w, h) => { const s = Math.min(w, h) * 0.85; return { width: s, height: s }; } 
+          }, 
           handleScan, 
           () => {}
       );
@@ -194,14 +200,19 @@ const QRScanner: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         {/* LOADING STATE */}
         {isInitializing && (
             <div className="absolute inset-0 z-[110] bg-slate-900 flex flex-col items-center justify-center text-white">
-                <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mb-4" />
+                <div className="relative">
+                    <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mb-4" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-6 h-6 bg-indigo-500/20 rounded-full animate-ping"></div>
+                    </div>
+                </div>
                 <p className="text-[10px] font-black uppercase tracking-[0.4em]">Sinkronisasi Kernel v11.3...</p>
             </div>
         )}
 
         {/* NOTIFIKASI POPUP (LAYER TERTINGGI - FIXED) */}
         {lastScanned && (
-            <div className="fixed inset-0 z-[999] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in zoom-in duration-200">
+            <div className="fixed inset-0 z-[999] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in zoom-in duration-150">
                 <div className={`w-full max-w-sm rounded-[3.5rem] p-10 border-2 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col items-center text-center ${
                     lastScanned.type === 'success' ? 'bg-emerald-600 border-emerald-400' : 
                     lastScanned.type === 'warning' ? 'bg-amber-600 border-amber-400' : 

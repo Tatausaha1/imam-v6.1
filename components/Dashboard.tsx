@@ -1,4 +1,3 @@
-
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -11,7 +10,7 @@ import {
   UsersGroupIcon, AcademicCapIcon, ClockIcon,
   CheckCircleIcon, EnvelopeIcon,
   CalendarIcon, BellIcon,
-  CameraIcon, Bars3CenterLeftIcon, HeadsetIcon
+  CameraIcon, HeadsetIcon, SunIcon, MoonIcon
 } from './Icons';
 import { format } from 'date-fns';
 
@@ -19,9 +18,11 @@ interface DashboardProps {
   onNavigate: (view: ViewState) => void;
   userRole: UserRole;
   onLogout: () => void;
+  onToggleTheme: () => void;
+  isDarkTheme: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleTheme, isDarkTheme }) => {
   const [userName, setUserName] = useState<string>('Pengguna');
   const [stats, setStats] = useState({ students: 0, teachers: 0, attendanceToday: 0 });
   const [loading, setLoading] = useState(true);
@@ -69,11 +70,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole }) => {
   }, [userRole, isSiswa]);
 
   return (
-    <div className="flex flex-col h-full bg-[#f8fafc] dark:bg-[#020617] overflow-hidden">
+    <div className="flex flex-col h-full bg-[#f8fafc] dark:bg-[#020617] overflow-hidden pt-[env(safe-area-inset-top)]">
       
       {/* HEADER DESKTOP-ADAPTIVE */}
       <header className="shrink-0 px-6 py-6 lg:py-10 bg-white dark:bg-[#0B1121] border-b border-slate-100 dark:border-slate-800/50 shadow-sm">
-        <div className="flex justify-between items-center max-w-7xl mx-auto">
+        <div className="flex justify-between items-center max-w-md md:max-w-4xl mx-auto w-full">
           <div className="animate-in slide-in-from-left-4 duration-500">
             <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.3em] mb-1.5">
                 {isSiswa ? 'Siswa Portal' : 'Admin Dashboard'}
@@ -87,17 +88,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole }) => {
                 <BellIcon className="w-5 h-5" />
                 <span className="absolute top-4 right-4 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-800 animate-pulse"></span>
              </button>
-             <button onClick={() => onNavigate(ViewState.ALL_FEATURES)} className="lg:hidden p-3.5 bg-indigo-600 text-white rounded-[1.2rem] shadow-xl shadow-indigo-500/20 active:scale-90 transition-all">
-                <Bars3CenterLeftIcon className="w-5 h-5" />
+             
+             {/* THEME TOGGLE REPLACED HAMBURGER */}
+             <button 
+                onClick={onToggleTheme} 
+                className="p-3.5 bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-amber-400 rounded-[1.2rem] border border-indigo-100 dark:border-slate-700 shadow-sm active:scale-90 transition-all lg:hidden"
+                aria-label="Ganti Tema"
+             >
+                {isDarkTheme ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
              </button>
           </div>
         </div>
       </header>
 
       <main className="flex-1 overflow-y-auto custom-scrollbar">
-        <div className="max-w-7xl mx-auto px-6 py-8 space-y-8 pb-32">
+        <div className="max-w-md md:max-w-4xl mx-auto px-6 py-8 space-y-8 pb-32 w-full">
             
-            {/* STATS GRID - 4 COLUMN ON DESKTOP */}
+            {/* STATS GRID */}
             <section className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
                 {isSiswa ? (
                     <div onClick={() => onNavigate(ViewState.ATTENDANCE_HISTORY)} className="bg-emerald-600 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-emerald-500/20 relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
@@ -123,13 +130,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole }) => {
                 )}
             </section>
 
-            {/* QUICK MENU GRID - 8 COLUMN ON DESKTOP */}
+            {/* QUICK MENU GRID */}
             <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
                 <div className="flex items-center justify-between px-1">
                     <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Menu Pintasan</h3>
                     <button onClick={() => onNavigate(ViewState.ALL_FEATURES)} className="text-[10px] font-black text-indigo-600 uppercase hover:underline">Lihat Katalog Lengkap</button>
                 </div>
-                <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 lg:gap-8">
+                <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-6 gap-4 lg:gap-8">
                     <QuickMenu icon={CameraIcon} label="Scanner" color="text-teal-500" onClick={() => onNavigate(ViewState.SCANNER)} />
                     <QuickMenu icon={CalendarIcon} label="Jadwal" color="text-orange-500" onClick={() => onNavigate(ViewState.SCHEDULE)} />
                     <QuickMenu icon={AcademicCapIcon} label="Nilai" color="text-indigo-500" onClick={() => onNavigate(ViewState.GRADES)} />
@@ -139,7 +146,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole }) => {
                 </div>
             </section>
 
-            {/* TWO COLUMN ROW ON DESKTOP */}
+            {/* TWO COLUMN ROW */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <section className="bg-white dark:bg-[#151E32] rounded-[2.5rem] p-8 border border-slate-100 dark:border-slate-800 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
                     <div className="flex items-center gap-4 mb-8">
@@ -160,7 +167,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole }) => {
                     </div>
                     <div className="p-6 bg-slate-50 dark:bg-slate-900/50 rounded-[2rem] border border-dashed border-slate-200 dark:border-slate-800">
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold leading-relaxed uppercase italic">
-                            "Selamat datang di portal IMAM v6.5. Seluruh data akademik Anda tersinkronisasi secara otomatis dengan basis data cloud MAN 1 HST."
+                            "Selamat datang di portal IMAM v11. Seluruh data akademik Anda tersinkronisasi secara otomatis dengan basis data cloud MAN 1 HST."
                         </p>
                     </div>
                 </section>
@@ -193,7 +200,7 @@ const QuickMenu = ({ icon: Icon, label, color, onClick }: any) => (
         <div className="w-16 h-16 lg:w-20 lg:h-20 rounded-[1.8rem] bg-white dark:bg-[#151E32] border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-center group-hover:border-indigo-300 group-hover:shadow-indigo-500/10 transition-all">
             <Icon className={`w-7 h-7 lg:w-9 lg:h-9 ${color} transition-transform group-hover:scale-110`} />
         </div>
-        <span className="text-[10px] lg:text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter truncate w-full text-center group-hover:text-slate-800 dark:group-hover:text-white">{label}</span>
+        <span className="text-[10px] lg:text-[11px] font-black text-slate-50 dark:text-slate-400 uppercase tracking-tighter truncate w-full text-center group-hover:text-slate-800 dark:group-hover:text-white">{label}</span>
     </button>
 );
 

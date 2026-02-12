@@ -1,4 +1,3 @@
-
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -209,7 +208,7 @@ const App: React.FC = () => {
   const renderViewContent = () => {
     switch (currentView) {
       case ViewState.LOGIN: return <Login onLogin={handleLoginSuccess} />;
-      case ViewState.DASHBOARD: return <Dashboard onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />;
+      case ViewState.DASHBOARD: return <Dashboard onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} onToggleTheme={toggleTheme} isDarkTheme={isDarkTheme} />;
       case ViewState.PROFILE: return <Profile onBack={handleBack} onLogout={handleLogout} />;
       case ViewState.SCHEDULE: return <Schedule onBack={handleBack} />;
       case ViewState.ALL_FEATURES: return <AllFeatures onBack={handleBack} onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />;
@@ -278,10 +277,12 @@ const App: React.FC = () => {
                     </Suspense>
                 </div>
                 
-                {/* Mobile Dock */}
-                <div className={`shrink-0 z-40 relative ${viewMode === 'full' ? 'lg:hidden' : ''}`}>
-                    <BottomNav currentView={currentView} onNavigate={handleNavigate} />
-                </div>
+                {/* Mobile Dock - Hidden in Scanner View */}
+                {currentView !== ViewState.SCANNER && (
+                    <div className={`shrink-0 z-40 relative ${viewMode === 'full' ? 'lg:hidden' : ''}`}>
+                        <BottomNav currentView={currentView} onNavigate={handleNavigate} />
+                    </div>
+                )}
             </div>
         </div>
 

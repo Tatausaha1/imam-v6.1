@@ -1,6 +1,6 @@
 {
   "name": "IMAM - Integrated Madrasah",
-  "short_name": "IMAM",
+  "short_name": "IMAM V6.2",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#020617",
@@ -9,19 +9,19 @@
   "description": "Sistem Manajemen Madrasah Digital MAN 1 HST",
   "icons": [
     {
-      "src": "https://lh3.googleusercontent.com/d/1sdrClACEeaennb0J6dekMwTOKXob5NnQ",
+      "src": "https://lh3.googleusercontent.com/d/1RGCXWnp19Y3UJe7cUWy-krY6S2KQmt9K",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://lh3.googleusercontent.com/d/1sdrClACEeaennb0J6dekMwTOKXob5NnQ",
+      "src": "https://lh3.googleusercontent.com/d/1RGCXWnp19Y3UJe7cUWy-krY6S2KQmt9K",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://lh3.googleusercontent.com/d/1sdrClACEeaennb0J6dekMwTOKXob5NnQ",
+      "src": "https://lh3.googleusercontent.com/d/1RGCXWnp19Y3UJe7cUWy-krY6S2KQmt9K",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
