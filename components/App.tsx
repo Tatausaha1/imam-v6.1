@@ -9,6 +9,7 @@ import { ViewState, UserRole } from '../types';
 import { toast } from 'sonner';
 import { Loader2, AppLogo } from './Icons';
 import { auth, db, isMockMode } from '../services/firebase';
+import MobileContainer from './MobileContainer';
 
 // Komponen Inti
 import Login from './Login';
@@ -54,7 +55,7 @@ const NotificationCenter = lazy(() => import('./NotificationCenter'));
 
 const PageLoader = () => (
     <div className="h-full w-full flex flex-col items-center justify-center bg-white dark:bg-[#020617] animate-in fade-in duration-300">
-        <Loader2 className="w-10 h-10 text-emerald-500 animate-spin opacity-40 mb-4" />
+        <Loader2 className="w-10 h-10 text-indigo-500 animate-spin opacity-40 mb-4" />
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Memuat Modul...</p>
     </div>
 );
@@ -67,8 +68,12 @@ const App: React.FC = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [authLoading, setAuthLoading] = useState(true);
   const [viewKey, setViewKey] = useState(0); 
+  const [viewMode, setViewMode] = useState<'phone' | 'full'>('full');
 
   useEffect(() => {
+    const savedViewMode = localStorage.getItem('imam_view_mode') as 'phone' | 'full';
+    if (savedViewMode) setViewMode(savedViewMode);
+
     if (isMockMode || !db || currentView === ViewState.LOGIN || authLoading || !auth?.currentUser) return;
 
     try {
@@ -80,21 +85,18 @@ const App: React.FC = () => {
                         const data = change.doc.data();
                         toast.success(data.title || "Pemberitahuan Baru", {
                             description: data.message,
-                            action: {
-                                label: "LIHAT",
-                                onClick: () => handleNavigate(ViewState.NOTIFICATIONS)
-                            },
+                            action: { label: "LIHAT", onClick: () => handleNavigate(ViewState.NOTIFICATIONS) },
                             duration: 10000
                         });
                     }
                 });
             }, err => {
-                console.warn("Announcement stream temporarily unavailable:", err.message);
+                console.warn("Announcement stream temporarily unavailable.");
             });
 
         return () => unsub();
     } catch (e) {
-        console.error("Critical: Failed to setup global notification listener:", e);
+        console.error("Critical notification listener failure.");
     }
   }, [currentView, authLoading]); 
 
@@ -131,7 +133,7 @@ const App: React.FC = () => {
                           }
                       }
                   } catch (e: any) { 
-                      console.warn("Auth database sync delay:", e.message);
+                      console.warn("Auth database sync delay.");
                   }
               }
               setAuthLoading(false);
@@ -195,6 +197,11 @@ const App: React.FC = () => {
     setCurrentView(ViewState.LOGIN);
   };
 
+  const changeViewMode = (mode: 'phone' | 'full') => {
+    setViewMode(mode);
+    localStorage.setItem('imam_view_mode', mode);
+  };
+
   const staffAbove = [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.GURU, UserRole.STAF, UserRole.WALI_KELAS, UserRole.KEPALA_MADRASAH];
   const adminDevOnly = [UserRole.ADMIN, UserRole.DEVELOPER];
   const allAuthenticated = [...staffAbove, UserRole.SISWA, UserRole.ORANG_TUA, UserRole.KETUA_KELAS];
@@ -232,13 +239,7 @@ const App: React.FC = () => {
       case ViewState.POINTS: return <PointsView onBack={handleBack} />;
       case ViewState.ACADEMIC_YEAR: return <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={handleBack}><AcademicYear onBack={handleBack} /></ProtectedRoute>;
       case ViewState.PROMOTION: return <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={handleBack}><ClassPromotion onBack={handleBack} /></ProtectedRoute>;
-      case ViewState.PUSAKA: return <GenericView title="Pusaka Kemenag" onBack={handleBack} description="Integrasi resmi dengan Pusaka Super Apps RI." />;
-      case ViewState.CREATE_ACCOUNT: 
-        return (
-            <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={handleBack}>
-                <CreateAccount onBack={handleBack} userRole={userRole} />
-            </ProtectedRoute>
-        );
+      case ViewState.CREATE_ACCOUNT: return <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={handleBack}><CreateAccount onBack={handleBack} userRole={userRole} /></ProtectedRoute>;
       case ViewState.DEVELOPER: return <ProtectedRoute allowedRoles={adminDevOnly} userRole={userRole} onBack={handleBack}><DeveloperConsole onBack={handleBack} /></ProtectedRoute>;
       case ViewState.SETTINGS: return <Settings onBack={handleBack} onNavigate={handleNavigate} onLogout={handleLogout} isDarkMode={isDarkTheme} onToggleTheme={toggleTheme} userRole={userRole} />;
       default: return <GenericView title="Fitur" onBack={handleBack} />;
@@ -250,51 +251,46 @@ const App: React.FC = () => {
           <div className="fixed inset-0 h-screen w-full flex flex-col items-center justify-center bg-[#020617] z-[1000]">
               <div className="relative z-10 flex flex-col items-center animate-in fade-in duration-500">
                   <div className="w-24 h-24 mb-6"><AppLogo className="w-full h-full" /></div>
-                  <Loader2 className="w-6 h-6 text-emerald-500 animate-spin opacity-30" />
+                  <Loader2 className="w-6 h-6 text-indigo-500 animate-spin opacity-30" />
               </div>
           </div>
       );
   }
 
-  const isLoginPage = currentView === ViewState.LOGIN;
+  if (currentView === ViewState.LOGIN) return <Login onLogin={handleLoginSuccess} />;
 
   return (
-    <div className={`min-h-screen w-full flex flex-col relative transition-colors duration-500 ${isDarkTheme ? 'bg-[#020617]' : 'bg-[#f8fafc]'}`}>
-        {isLoginPage ? (
-            <Suspense fallback={<PageLoader />}>
-                {renderViewContent()}
-            </Suspense>
-        ) : (
-            <div className="h-screen w-full relative flex overflow-hidden">
-                {/* Desktop Sidebar */}
+    <MobileContainer isDarkTheme={isDarkTheme} viewMode={viewMode} onViewModeChange={changeViewMode}>
+        <div className="h-screen w-full relative flex overflow-hidden">
+            {/* Desktop Sidebar (Tampilkan hanya di mode full) */}
+            {viewMode === 'full' && (
                 <div className="hidden lg:block w-72 shrink-0 h-full border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-[#0B1121] z-40">
                     <Sidebar currentView={currentView} onNavigate={handleNavigate} userRole={userRole} onLogout={handleLogout} />
                 </div>
+            )}
+            
+            <div className="flex-1 flex flex-col h-full w-full relative overflow-hidden bg-[#f8fafc] dark:bg-[#020617]">
+                <div className="flex-1 overflow-hidden relative z-10">
+                    <Suspense fallback={<PageLoader />}>
+                        <div key={viewKey} className="h-full w-full relative">
+                            {renderViewContent()}
+                        </div>
+                    </Suspense>
+                </div>
                 
-                {/* Main Content Area */}
-                <div className="flex-1 flex flex-col h-full w-full relative overflow-hidden">
-                    <div className="flex-1 overflow-hidden relative z-10">
-                        <Suspense fallback={<PageLoader />}>
-                            <div key={viewKey} className="h-full w-full relative">
-                                {renderViewContent()}
-                            </div>
-                        </Suspense>
-                    </div>
-                    
-                    {/* Mobile Dock */}
-                    <div className="shrink-0 z-40 lg:hidden">
-                        <BottomNav currentView={currentView} onNavigate={handleNavigate} />
-                    </div>
+                {/* Mobile Dock (Sembunyikan jika di layar besar dan mode full) */}
+                <div className={`shrink-0 z-40 ${viewMode === 'full' ? 'lg:hidden' : ''}`}>
+                    <BottomNav currentView={currentView} onNavigate={handleNavigate} />
                 </div>
             </div>
-        )}
-        
+        </div>
+
         {!isOnline && (
             <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[1000] bg-orange-600/90 backdrop-blur-md text-white text-[8px] font-black uppercase tracking-[0.2em] px-4 py-1 rounded-full shadow-lg">
-                Offline
+                Offline Mode
             </div>
         )}
-    </div>
+    </MobileContainer>
   );
 };
 

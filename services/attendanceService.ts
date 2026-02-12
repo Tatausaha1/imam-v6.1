@@ -15,81 +15,86 @@ const COLLECTION_STUDENTS = 'students';
 const COLLECTION_ATTENDANCE = 'attendance';
 const STATS_DOC = 'stats/summary';
 
+/**
+ * Mencatat kehadiran siswa berdasarkan kode QR idUnik.
+ * Mendukung mode offline melalui Firestore Persistence.
+ */
 export const recordAttendanceByScan = async (code: string, session: AttendanceSession, isHaid: boolean = false): Promise<any> => {
-    const rawId = String(code || '').trim();
-    if (!rawId || !db) return { success: false, message: "ID TIDAK VALID" };
+    const cleanId = String(code || '').replace(/\s/g, '').trim();
+    if (!cleanId || !db) return { success: false, message: "KODE TIDAK VALID" };
 
     const today = format(new Date(), "yyyy-MM-dd");
+    const nowTime = format(new Date(), "HH:mm:ss");
     
     try {
+        // --- STRATEGI IDENTIFIKASI ---
         let studentData: Student | null = null;
-        
-        // --- LAYER 1: DIRECT ACCESS (Paling Hemat) ---
-        const refById = db.collection(COLLECTION_STUDENTS).doc(rawId);
-        const snapById = await refById.get();
-        
-        if (snapById.exists) {
-            studentData = { id: snapById.id, ...snapById.data() } as Student;
-        } else {
-            // --- LAYER 2: INDEXED QUERY (idUnik) ---
-            const snapByUnik = await db.collection(COLLECTION_STUDENTS).where('idUnik', '==', rawId).limit(1).get();
-            if (!snapByUnik.empty) {
-                const doc = snapByUnik.docs[0];
-                studentData = { id: doc.id, ...doc.data() } as Student;
-            } else {
-                // --- LAYER 3: FALLBACK (nisn) ---
-                const snapByNisn = await db.collection(COLLECTION_STUDENTS).where('nisn', '==', rawId).limit(1).get();
-                if (!snapByNisn.empty) {
-                    const doc = snapByNisn.docs[0];
-                    studentData = { id: doc.id, ...doc.data() } as Student;
-                }
-            }
+        let snap = await db.collection(COLLECTION_STUDENTS).where('idUnik', '==', cleanId).limit(1).get();
+            
+        if (snap.empty && /^\d+$/.test(cleanId)) {
+            snap = await db.collection(COLLECTION_STUDENTS).where('idUnik', '==', Number(cleanId)).limit(1).get();
         }
 
-        if (!studentData) return { success: false, message: "DATA TIDAK DITEMUKAN" };
+        if (snap.empty) {
+            snap = await db.collection(COLLECTION_STUDENTS).where('nisn', '==', cleanId).limit(1).get();
+        }
+
+        if (snap.empty) {
+            const docSnap = await db.collection(COLLECTION_STUDENTS).doc(cleanId).get();
+            if (docSnap.exists) studentData = { id: docSnap.id, ...docSnap.data() } as Student;
+        } else {
+            studentData = { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
+        }
+
+        if (!studentData) return { success: false, message: "ID TIDAK TERDAFTAR" };
 
         const attId = `${studentData.id}_${today}`;
         const attRef = db.collection(COLLECTION_ATTENDANCE).doc(attId);
-        const attSnap = await attRef.get();
 
-        const fieldMap: any = { 'Masuk': 'checkIn', 'Duha': 'duha', 'Zuhur': 'zuhur', 'Ashar': 'ashar', 'Pulang': 'checkOut' };
-        const fieldName = fieldMap[session];
+        const fieldMap: any = { 
+            'Masuk': 'checkIn', 
+            'Duha': 'duha', 
+            'Zuhur': 'zuhur', 
+            'Ashar': 'ashar', 
+            'Pulang': 'checkOut' 
+        };
 
-        if (attSnap.exists && attSnap.data()?.[fieldName]) {
-            return { success: false, message: "SUDAH ABSEN SESI INI" };
-        }
-
-        const nowTime = format(new Date(), "HH:mm:ss");
+        const batch = db.batch();
         const payload: any = {
             studentId: studentData.id,
             studentName: studentData.namaLengkap,
             class: studentData.tingkatRombel || '-',
             date: today,
-            status: isHaid ? 'Haid' : 'Hadir',
-            [fieldName]: isHaid ? `${nowTime} | H` : nowTime,
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         };
 
-        // --- TRANSACTION / BATCH BIAYA RENDAH ---
-        const batch = db.batch();
+        if (isHaid) {
+            // MODE HAID: Otomatis isi semua sesi ibadah
+            payload.status = 'Haid';
+            payload.duha = `${nowTime} | H`;
+            payload.zuhur = `${nowTime} | H`;
+            payload.ashar = `${nowTime} | H`;
+        } else {
+            payload.status = 'Hadir';
+            payload[fieldMap[session]] = nowTime;
+        }
+
         batch.set(attRef, payload, { merge: true });
 
-        // Update Agregasi Statistik (Hanya dilakukan pada scan 'Masuk' untuk hitung kehadiran harian)
+        // Update Statistik Presensi Global
         if (session === 'Masuk' && !isHaid) {
-            const statsRef = db.doc(STATS_DOC);
-            batch.set(statsRef, {
+            batch.set(db.doc(STATS_DOC), {
                 dailyStats: {
-                    [today]: {
-                        presentCount: firebase.firestore.FieldValue.increment(1)
-                    }
+                    [today]: { presentCount: firebase.firestore.FieldValue.increment(1) }
                 }
             }, { merge: true });
         }
 
         await batch.commit();
-        return { success: true, message: "PRESENSI BERHASIL", student: studentData };
+        return { success: true, message: "ABSEN BERHASIL", student: studentData };
 
     } catch (error: any) {
-        return { success: false, message: "GANGGUAN KONEKSI" };
+        console.error("Attendance Sync Error:", error);
+        return { success: false, message: "SYNC OFFLINE AKTIF" };
     }
 };
