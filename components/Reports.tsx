@@ -15,7 +15,7 @@ import {
   ArrowRightIcon
 } from './Icons';
 import { db, isMockMode } from '../services/firebase';
-import { format } from 'date-fns';
+import { endOfMonth, format, parseISO, startOfMonth } from 'date-fns';
 import { id as localeID } from 'date-fns/locale/id';
 import { Student, UserRole, ViewState, ClassData } from '../types';
 import { jsPDF } from "jspdf";
@@ -30,7 +30,9 @@ interface ReportsProps {
 
 const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
     const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-    const [selectedClassFilter, setSelectedClassFilter] = useState<string>('All');
+    const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
+    const [reportMode, setReportMode] = useState<'harian' | 'bulanan'>('harian');
+    const [selectedClassFilter, setSelectedClassFilter] = useState<string>('10 A');
     const [filterNama, setFilterNama] = useState('');
     const [allStudents, setAllStudents] = useState<Student[]>([]);
     const [classes, setClasses] = useState<ClassData[]>([]);
@@ -82,16 +84,25 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
             setLoading(true);
             if (isMockMode) {
                 setAttendanceRecords([
-                    { studentId: '1', status: 'Hadir', checkIn: '07:12:05', duha: '08:05:00', zuhur: '12:30:00', ashar: '15:45:00', checkOut: '16:05:00' },
-                    { studentId: '2', status: 'Terlambat', checkIn: '07:39:21 | +9', duha: '08:15:00', zuhur: '12:35:00', ashar: null, checkOut: null },
-                    { studentId: '4', status: 'Haid', checkIn: null, duha: '08:10:00 | H', zuhur: '12:30:00 | H', ashar: '15:40:00 | H', checkOut: '15:55:00 | -5' }
+                    { studentId: '1', date: '2026-02-16', status: 'Hadir', checkIn: '07:12:05', duha: '08:05:00', zuhur: '12:30:00', ashar: '15:45:00', checkOut: '16:05:00' },
+                    { studentId: '1', date: '2026-02-17', status: 'Hadir', checkIn: '07:11:00', duha: '08:10:00', zuhur: '12:31:00', ashar: '15:40:00', checkOut: '16:01:00' },
+                    { studentId: '2', date: '2026-02-16', status: 'Terlambat', checkIn: '07:39:21 | +9', duha: '08:15:00', zuhur: '12:35:00', ashar: null, checkOut: null },
+                    { studentId: '4', date: '2026-02-16', status: 'Haid', checkIn: null, duha: '08:10:00 | H', zuhur: '12:30:00 | H', ashar: '15:40:00 | H', checkOut: '15:55:00 | -5' }
                 ]);
                 setLoading(false);
                 return;
             }
 
             try {
-                const snap = await db!.collection('attendance').where('date', '==', selectedDate).get();
+                let query = db!.collection('attendance');
+                if (reportMode === 'harian') {
+                    query = query.where('date', '==', selectedDate);
+                } else {
+                    const monthStart = format(startOfMonth(parseISO(`${selectedMonth}-01`)), 'yyyy-MM-dd');
+                    const monthEnd = format(endOfMonth(parseISO(`${selectedMonth}-01`)), 'yyyy-MM-dd');
+                    query = query.where('date', '>=', monthStart).where('date', '<=', monthEnd);
+                }
+                const snap = await query.get();
                 if (!isMounted) return;
                 setAttendanceRecords(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             } catch (err: any) {
@@ -108,53 +119,132 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
         return () => {
             isMounted = false;
         };
-    }, [selectedDate]);
+    }, [reportMode, selectedDate, selectedMonth]);
+
+    const monthlyAttendanceMap = useMemo(() => {
+        if (reportMode !== 'bulanan') return new Map<string, any>();
+
+        const map = new Map<string, any>();
+        attendanceRecords.forEach((record) => {
+            if (!record?.studentId) return;
+            const current = map.get(record.studentId) || {
+                studentId: record.studentId,
+                hadir: 0,
+                izin: 0,
+                sakit: 0,
+                alpha: 0,
+                checkIn: 0,
+                duha: 0,
+                zuhur: 0,
+                ashar: 0,
+                checkOut: 0,
+            };
+
+            const status = record.status || 'Alpha';
+            if (status === 'Hadir' || status === 'Terlambat' || status === 'Haid') current.hadir += 1;
+            else if (status === 'Izin') current.izin += 1;
+            else if (status === 'Sakit') current.sakit += 1;
+            else current.alpha += 1;
+
+            if (record.checkIn) current.checkIn += 1;
+            if (record.duha) current.duha += 1;
+            if (record.zuhur) current.zuhur += 1;
+            if (record.ashar) current.ashar += 1;
+            if (record.checkOut) current.checkOut += 1;
+
+            map.set(record.studentId, current);
+        });
+        return map;
+    }, [attendanceRecords, reportMode]);
 
     const stats = useMemo(() => {
         const filtered = allStudents.filter(s => selectedClassFilter === 'All' || s.tingkatRombel === selectedClassFilter);
-        const attMap = new Map<string, any>(attendanceRecords.map(r => [r.studentId, r]));
         let hadir = 0, izin = 0, sakit = 0, alpha = 0;
-        filtered.forEach(s => {
-            const att = attMap.get(s.id!);
-            const status = att?.status || 'Alpha';
-            if (status === 'Hadir' || status === 'Terlambat' || status === 'Haid') hadir++;
-            else if (status === 'Izin') izin++;
-            else if (status === 'Sakit') sakit++;
-            else alpha++;
-        });
+
+        if (reportMode === 'harian') {
+            const attMap = new Map<string, any>(attendanceRecords.map(r => [r.studentId, r]));
+            filtered.forEach(s => {
+                const att = attMap.get(s.id!);
+                const status = att?.status || 'Alpha';
+                if (status === 'Hadir' || status === 'Terlambat' || status === 'Haid') hadir++;
+                else if (status === 'Izin') izin++;
+                else if (status === 'Sakit') sakit++;
+                else alpha++;
+            });
+        } else {
+            filtered.forEach((s) => {
+                const item = monthlyAttendanceMap.get(s.id!);
+                hadir += item?.hadir || 0;
+                izin += item?.izin || 0;
+                sakit += item?.sakit || 0;
+                alpha += item?.alpha || 0;
+            });
+        }
+
         return { total: filtered.length, hadir, izin, sakit, alpha };
-    }, [allStudents, attendanceRecords, selectedClassFilter]);
+    }, [allStudents, attendanceRecords, selectedClassFilter, reportMode, monthlyAttendanceMap]);
 
     const sessionStats = useMemo(() => {
         const filtered = allStudents.filter(s => selectedClassFilter === 'All' || s.tingkatRombel === selectedClassFilter);
-        const attMap = new Map<string, any>(attendanceRecords.map(r => [r.studentId, r]));
         const totals = { masuk: 0, duha: 0, zuhur: 0, ashar: 0, pulang: 0 };
 
-        filtered.forEach((student) => {
-            const att = attMap.get(student.id!);
-            if (!att) return;
-            if (att.checkIn) totals.masuk++;
-            if (att.duha) totals.duha++;
-            if (att.zuhur) totals.zuhur++;
-            if (att.ashar) totals.ashar++;
-            if (att.checkOut) totals.pulang++;
-        });
+        if (reportMode === 'harian') {
+            const attMap = new Map<string, any>(attendanceRecords.map(r => [r.studentId, r]));
+            filtered.forEach((student) => {
+                const att = attMap.get(student.id!);
+                if (!att) return;
+                if (att.checkIn) totals.masuk++;
+                if (att.duha) totals.duha++;
+                if (att.zuhur) totals.zuhur++;
+                if (att.ashar) totals.ashar++;
+                if (att.checkOut) totals.pulang++;
+            });
+        } else {
+            filtered.forEach((student) => {
+                const item = monthlyAttendanceMap.get(student.id!);
+                if (!item) return;
+                totals.masuk += item.checkIn || 0;
+                totals.duha += item.duha || 0;
+                totals.zuhur += item.zuhur || 0;
+                totals.ashar += item.ashar || 0;
+                totals.pulang += item.checkOut || 0;
+            });
+        }
 
         return totals;
-    }, [allStudents, attendanceRecords, selectedClassFilter]);
+    }, [allStudents, attendanceRecords, selectedClassFilter, reportMode, monthlyAttendanceMap]);
 
     const displayData = useMemo(() => {
-        const attMap = new Map<string, any>(attendanceRecords.map(r => [r.studentId, r]));
-        return allStudents.filter(s => {
+        const filteredStudents = allStudents.filter(s => {
             const q = filterNama.toLowerCase().trim();
             const matchesNama = q === '' || (s.namaLengkap || '').toLowerCase().includes(q) || String(s.idUnik || '').toLowerCase().includes(q);
             const matchesKelas = selectedClassFilter === 'All' || s.tingkatRombel === selectedClassFilter;
             return matchesNama && matchesKelas;
-        }).sort((a, b) => (a.namaLengkap || '').localeCompare(b.namaLengkap || '')).map(s => {
-            const att = attMap.get(s.id!) || { status: 'Alpha', checkIn: null, duha: null, zuhur: null, ashar: null, checkOut: null };
-            return { ...s, att };
+        }).sort((a, b) => (a.namaLengkap || '').localeCompare(b.namaLengkap || ''));
+
+        if (reportMode === 'harian') {
+            const attMap = new Map<string, any>(attendanceRecords.map(r => [r.studentId, r]));
+            return filteredStudents.map(s => {
+                const att = attMap.get(s.id!) || { status: 'Alpha', checkIn: null, duha: null, zuhur: null, ashar: null, checkOut: null };
+                return { ...s, att };
+            });
+        }
+
+        return filteredStudents.map((s) => {
+            const item = monthlyAttendanceMap.get(s.id!) || { hadir: 0, checkIn: 0, duha: 0, zuhur: 0, ashar: 0, checkOut: 0 };
+            return {
+                ...s,
+                att: {
+                    status: item.hadir > 0 ? `${item.hadir} hari hadir` : 'Alpha',
+                    checkIn: `${item.checkIn || 0}`,
+                    duha: `${item.duha || 0}`,
+                    zuhur: `${item.zuhur || 0}`,
+                    ashar: `${item.ashar || 0}`,
+                    checkOut: `${item.checkOut || 0}`,
+                }
+            };
         });
-    }, [allStudents, attendanceRecords, filterNama, selectedClassFilter]);
+    }, [allStudents, attendanceRecords, filterNama, selectedClassFilter, reportMode, monthlyAttendanceMap]);
 
     const parseTimeWithMeta = (rawTime: string | null) => {
         if (!rawTime) return { time: '--:--', meta: null };
@@ -343,6 +433,16 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
         );
     };
 
+    const classFilterOptions = useMemo(() => {
+        const set = new Set<string>(classes.map(c => c.name).filter(Boolean));
+        allStudents.forEach((s) => {
+            if (s.tingkatRombel) set.add(s.tingkatRombel);
+        });
+        return ['All', ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+    }, [classes, allStudents]);
+
+    const showDetailColumns = isDetailView || reportMode === 'bulanan';
+
     return (
         <Layout 
             title="Laporan Presensi" 
@@ -378,7 +478,7 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
 
                 <div className="px-3 pb-2">
                     <div className="bg-white dark:bg-[#0B1121] p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-2">Laporan Harian 5 Sesi</p>
+                        <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-2">Laporan 5 Sesi</p>
                         <div className="grid grid-cols-5 gap-2">
                             <SessionStatPill label="Masuk" value={sessionStats.masuk} />
                             <SessionStatPill label="Duha" value={sessionStats.duha} />
@@ -386,30 +486,53 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
                             <SessionStatPill label="Ashar" value={sessionStats.ashar} />
                             <SessionStatPill label="Pulang" value={sessionStats.pulang} />
                         </div>
+                        <p className="text-[8px] font-bold text-slate-400 uppercase mt-2">Mode: {reportMode === 'harian' ? `Harian ${selectedDate}` : `Bulanan ${selectedMonth}`}</p>
                     </div>
                 </div>
 
                 {/* --- TIGHT FILTERS --- */}
                 <div className="px-3 mb-3">
                     <div className="bg-white dark:bg-[#0B1121] p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <div className="flex flex-col sm:flex-row gap-2">
-                            <div className="relative flex-1">
+                        <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+                            <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
+                                <button
+                                    onClick={() => setReportMode('harian')}
+                                    className={`px-3 py-2 text-[9px] font-black uppercase ${reportMode === 'harian' ? 'bg-indigo-600 text-white' : 'bg-slate-50 dark:bg-slate-900 text-slate-500'}`}
+                                >Harian</button>
+                                <button
+                                    onClick={() => setReportMode('bulanan')}
+                                    className={`px-3 py-2 text-[9px] font-black uppercase ${reportMode === 'bulanan' ? 'bg-indigo-600 text-white' : 'bg-slate-50 dark:bg-slate-900 text-slate-500'}`}
+                                >Bulanan</button>
+                            </div>
+
+                            <div className="relative shrink-0 min-w-[145px]">
                                 <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-indigo-500" />
-                                <input 
-                                    type="date" 
-                                    value={selectedDate} 
-                                    onChange={e => setSelectedDate(e.target.value)} 
-                                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 pl-9 pr-3 text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-800 dark:text-white transition-all" 
+                                <input
+                                    type={reportMode === 'harian' ? 'date' : 'month'}
+                                    value={reportMode === 'harian' ? selectedDate : selectedMonth}
+                                    onChange={e => reportMode === 'harian' ? setSelectedDate(e.target.value) : setSelectedMonth(e.target.value)}
+                                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 pl-9 pr-3 text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-800 dark:text-white transition-all"
                                 />
                             </div>
-                            <div className="relative flex-1">
+
+                            <select
+                                value={selectedClassFilter}
+                                onChange={e => setSelectedClassFilter(e.target.value)}
+                                className="shrink-0 min-w-[110px] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-800 dark:text-white transition-all"
+                            >
+                                {classFilterOptions.map((cls) => (
+                                    <option key={cls} value={cls}>{cls === 'All' ? 'Semua Kelas' : cls}</option>
+                                ))}
+                            </select>
+
+                            <div className="relative flex-1 min-w-[180px]">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                                <input 
-                                    type="text" 
-                                    placeholder="Cari nama..." 
-                                    value={filterNama} 
-                                    onChange={e => setFilterNama(e.target.value)} 
-                                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 pl-9 pr-3 text-[10px] font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-800 dark:text-white transition-all" 
+                                <input
+                                    type="text"
+                                    placeholder="CARI NAMA SISWA"
+                                    value={filterNama}
+                                    onChange={e => setFilterNama(e.target.value)}
+                                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 pl-9 pr-3 text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-800 dark:text-white transition-all"
                                 />
                             </div>
                         </div>
@@ -430,7 +553,7 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
                                         <tr className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
                                             <th className="w-8 py-3 border-r border-slate-100 dark:border-slate-800 text-center">#</th>
                                             <th className="w-32 px-3 py-3 text-left border-r border-slate-100 dark:border-slate-800 sticky left-0 z-20 bg-slate-50 dark:bg-slate-900">Nama</th>
-                                            {isDetailView ? (
+                                            {showDetailColumns ? (
                                                 <>
                                                     <th className="w-12 py-3 text-center border-r border-slate-100 dark:border-slate-800">Masuk</th>
                                                     <th className="w-12 py-3 text-center border-r border-slate-100 dark:border-slate-800">Duha</th>
@@ -454,7 +577,7 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
                                                     </div>
                                                 </td>
                                                 
-                                                {isDetailView ? (
+                                                {showDetailColumns ? (
                                                     <>
                                                         <TimeCell rawTime={s.att.checkIn} />
                                                         <TimeCell rawTime={s.att.duha} />
@@ -476,7 +599,7 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
                                             </tr>
                                         )) : (
                                             <tr>
-                                                <td colSpan={isDetailView ? 7 : 3} className="py-12 text-center opacity-30">
+                                                <td colSpan={showDetailColumns ? 7 : 3} className="py-12 text-center opacity-30">
                                                     <p className="text-[8px] font-black uppercase tracking-widest">Kosong</p>
                                                 </td>
                                             </tr>
