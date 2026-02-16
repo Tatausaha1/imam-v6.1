@@ -417,22 +417,6 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
         );
     };
 
-    const StatusDot = ({ rawTime, label }: { rawTime: string | null, label: string }) => {
-        const { meta } = parseTimeWithMeta(rawTime);
-        const isHaid = meta === 'H';
-        const isFilled = !!rawTime;
-        
-        return (
-            <div className={`w-5 h-5 rounded-md flex items-center justify-center text-[7px] font-black shrink-0 transition-all ${
-                isFilled 
-                ? (isHaid ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white') 
-                : 'bg-slate-100 dark:bg-slate-900 text-slate-300 dark:text-slate-700'
-            }`}>
-                {label}
-            </div>
-        );
-    };
-
     const classFilterOptions = useMemo(() => {
         const set = new Set<string>(classes.map(c => c.name).filter(Boolean));
         allStudents.forEach((s) => {
@@ -441,7 +425,6 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
         return ['All', ...Array.from(set).sort((a, b) => a.localeCompare(b))];
     }, [classes, allStudents]);
 
-    const showDetailColumns = isDetailView || reportMode === 'bulanan';
 
     return (
         <Layout 
@@ -553,17 +536,12 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
                                         <tr className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
                                             <th className="w-8 py-3 border-r border-slate-100 dark:border-slate-800 text-center">#</th>
                                             <th className="w-32 px-3 py-3 text-left border-r border-slate-100 dark:border-slate-800 sticky left-0 z-20 bg-slate-50 dark:bg-slate-900">Nama</th>
-                                            {showDetailColumns ? (
-                                                <>
-                                                    <th className="w-12 py-3 text-center border-r border-slate-100 dark:border-slate-800">Masuk</th>
-                                                    <th className="w-12 py-3 text-center border-r border-slate-100 dark:border-slate-800">Duha</th>
-                                                    <th className="w-12 py-3 text-center border-r border-slate-100 dark:border-slate-800">Zuhur</th>
-                                                    <th className="w-12 py-3 text-center border-r border-slate-100 dark:border-slate-800">Ashar</th>
-                                                    <th className="w-12 py-3 text-center">Pulang</th>
-                                                </>
-                                            ) : (
-                                                <th className="py-3 text-center">M-D-Z-A-P</th>
-                                            )}
+                                            <th className="w-14 py-3 text-center border-r border-slate-100 dark:border-slate-800">checkIn</th>
+                                            <th className="w-14 py-3 text-center border-r border-slate-100 dark:border-slate-800">duha</th>
+                                            <th className="w-14 py-3 text-center border-r border-slate-100 dark:border-slate-800">zuhur</th>
+                                            <th className="w-14 py-3 text-center border-r border-slate-100 dark:border-slate-800">ashar</th>
+                                            <th className="w-14 py-3 text-center border-r border-slate-100 dark:border-slate-800">checkOut</th>
+                                            <th className="w-16 py-3 text-center">KET</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
@@ -577,29 +555,18 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
                                                     </div>
                                                 </td>
                                                 
-                                                {showDetailColumns ? (
-                                                    <>
-                                                        <TimeCell rawTime={s.att.checkIn} />
-                                                        <TimeCell rawTime={s.att.duha} />
-                                                        <TimeCell rawTime={s.att.zuhur} />
-                                                        <TimeCell rawTime={s.att.ashar} />
-                                                        <TimeCell rawTime={s.att.checkOut} />
-                                                    </>
-                                                ) : (
-                                                    <td className="px-2 py-2.5">
-                                                        <div className="flex justify-center gap-1">
-                                                            <StatusDot rawTime={s.att.checkIn} label="M" />
-                                                            <StatusDot rawTime={s.att.duha} label="D" />
-                                                            <StatusDot rawTime={s.att.zuhur} label="Z" />
-                                                            <StatusDot rawTime={s.att.ashar} label="A" />
-                                                            <StatusDot rawTime={s.att.checkOut} label="P" />
-                                                        </div>
-                                                    </td>
-                                                )}
+                                                <TimeCell rawTime={s.att.checkIn} />
+                                                <TimeCell rawTime={s.att.duha} />
+                                                <TimeCell rawTime={s.att.zuhur} />
+                                                <TimeCell rawTime={s.att.ashar} />
+                                                <TimeCell rawTime={s.att.checkOut} />
+                                                <td className="px-1 py-2.5 text-center">
+                                                    <span className="inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 text-[8px] font-black uppercase text-slate-600 dark:text-slate-200">{s.att.status || 'Alpha'}</span>
+                                                </td>
                                             </tr>
                                         )) : (
                                             <tr>
-                                                <td colSpan={showDetailColumns ? 7 : 3} className="py-12 text-center opacity-30">
+                                                <td colSpan={8} className="py-12 text-center opacity-30">
                                                     <p className="text-[8px] font-black uppercase tracking-widest">Kosong</p>
                                                 </td>
                                             </tr>
