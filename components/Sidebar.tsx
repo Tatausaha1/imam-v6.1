@@ -8,7 +8,7 @@ import React, { useMemo } from 'react';
 import { ViewState, UserRole } from '../types';
 import { 
   HomeIcon, UserIcon, QrCodeIcon, ChartBarIcon, AppLogo, 
-  BookOpenIcon, EnvelopeIcon, CalendarDaysIcon, UsersIcon, LogOutIcon,
+  BookOpenIcon, EnvelopeIcon, CalendarDaysIcon, LogOutIcon,
   BriefcaseIcon, CalendarIcon, ArrowTrendingUpIcon, BuildingLibraryIcon,
   InfoIcon, XMarkIcon, CommandLineIcon, ClipboardDocumentListIcon, AcademicCapIcon,
   CogIcon, UserPlusIcon, HeadsetIcon, StarIcon, ClockIcon, ShieldCheckIcon,
@@ -67,9 +67,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
     {
       title: 'Master Data',
       items: [
-        { label: 'Siswa', icon: UsersIcon, view: ViewState.STUDENTS, roles: [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.GURU, UserRole.STAF, UserRole.WALI_KELAS, UserRole.KEPALA_MADRASAH] },
         { label: 'Guru', icon: BriefcaseIcon, view: ViewState.TEACHERS, roles: [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.GURU, UserRole.STAF, UserRole.KEPALA_MADRASAH] },
-        { label: 'Kelas', icon: BookOpenIcon, view: ViewState.CLASSES, roles: [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.GURU, UserRole.STAF, UserRole.WALI_KELAS, UserRole.KEPALA_MADRASAH] },
+        { label: 'Kelas & Siswa', icon: BookOpenIcon, view: ViewState.CLASSES, roles: [UserRole.ADMIN, UserRole.DEVELOPER, UserRole.GURU, UserRole.STAF, UserRole.WALI_KELAS, UserRole.KEPALA_MADRASAH] },
         { label: 'Surat', icon: EnvelopeIcon, view: ViewState.LETTERS },
       ]
     },
