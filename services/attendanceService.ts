@@ -23,13 +23,25 @@ const COLLECTION_ATTENDANCE = 'attendance';
 const COLLECTION_STUDENTS = 'students';
 const COLLECTION_ACADEMIC_YEARS = 'academic_years';
 
+const CONFIG_CACHE_TTL_MS = 5 * 60 * 1000;
+let activeSessionConfigCache: { value: any; fetchedAt: number } | null = null;
+const studentLookupCache = new Map<string, Student>();
+
 const getActiveSessionConfig = async () => {
     if (isMockMode || !db) return null;
+
+    const now = Date.now();
+    if (activeSessionConfigCache && (now - activeSessionConfigCache.fetchedAt) < CONFIG_CACHE_TTL_MS) {
+        return activeSessionConfigCache.value;
+    }
+
     try {
         const snap = await db.collection(COLLECTION_ACADEMIC_YEARS).where('isActive', '==', true).limit(1).get();
         if (snap.empty) return null;
         const data = snap.docs[0].data();
-        return data.config || null;
+        const config = data.config || null;
+        activeSessionConfigCache = { value: config, fetchedAt: now };
+        return config;
     } catch (e) {
         return null;
     }
@@ -89,33 +101,40 @@ export const recordAttendanceByScan = async (rawCode: string, session: Attendanc
     if (!db) return { success: false, message: "DATABASE OFFLINE" };
 
     try {
-        let studentData: Student | null = null;
+        let studentData: Student | null = studentLookupCache.get(code) || null;
         
         // --- LOGIKA PENCARIAN BERLAPIS (MULTI-IDENTIFIER) ---
         
-        // 1. PRIORITAS UTAMA: Cari berdasarkan Document ID (Sangat Cepat)
-        const studentRefById = db.collection(COLLECTION_STUDENTS).doc(code);
-        const studentSnap = await studentRefById.get();
-        
-        if (studentSnap.exists) {
-            studentData = { id: studentSnap.id, ...studentSnap.data() } as Student;
-        } else {
-            // 2. PRIORITAS KEDUA: Cari berdasarkan field 'idUnik'
-            const idUnikQuery = await db.collection(COLLECTION_STUDENTS).where('idUnik', '==', code).limit(1).get();
-            if (!idUnikQuery.empty) {
-                const doc = idUnikQuery.docs[0];
-                studentData = { id: doc.id, ...doc.data() } as Student;
+        if (!studentData) {
+            // 1. PRIORITAS UTAMA: Cari berdasarkan Document ID (Sangat Cepat)
+            const studentRefById = db.collection(COLLECTION_STUDENTS).doc(code);
+            const studentSnap = await studentRefById.get();
+            
+            if (studentSnap.exists) {
+                studentData = { id: studentSnap.id, ...studentSnap.data() } as Student;
             } else {
-                // 3. PRIORITAS TERAKHIR: Cari berdasarkan field 'nisn'
-                const nisnQuery = await db.collection(COLLECTION_STUDENTS).where('nisn', '==', code).limit(1).get();
-                if (!nisnQuery.empty) {
-                    const doc = nisnQuery.docs[0];
+                // 2. PRIORITAS KEDUA: Cari berdasarkan field 'idUnik'
+                const idUnikQuery = await db.collection(COLLECTION_STUDENTS).where('idUnik', '==', code).limit(1).get();
+                if (!idUnikQuery.empty) {
+                    const doc = idUnikQuery.docs[0];
                     studentData = { id: doc.id, ...doc.data() } as Student;
+                } else {
+                    // 3. PRIORITAS TERAKHIR: Cari berdasarkan field 'nisn'
+                    const nisnQuery = await db.collection(COLLECTION_STUDENTS).where('nisn', '==', code).limit(1).get();
+                    if (!nisnQuery.empty) {
+                        const doc = nisnQuery.docs[0];
+                        studentData = { id: doc.id, ...doc.data() } as Student;
+                    }
                 }
             }
         }
 
         if (!studentData) return { success: false, message: `ID "${code}" TIDAK TERDAFTAR` };
+
+        studentLookupCache.set(code, studentData);
+        if (studentData.idUnik) studentLookupCache.set(studentData.idUnik, studentData);
+        if (studentData.nisn) studentLookupCache.set(studentData.nisn, studentData);
+        if (studentData.id) studentLookupCache.set(studentData.id, studentData);
 
         // Pastikan kita menggunakan Document ID asli untuk primary key absensi
         const attendanceId = `${studentData.id}_${today}`;
