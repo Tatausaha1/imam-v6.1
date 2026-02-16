@@ -76,26 +76,38 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
 
     useEffect(() => {
         if (!db && !isMockMode) return;
-        setLoading(true);
-        const unsub = isMockMode ? () => {} : db!.collection('attendance').where('date', '==', selectedDate).onSnapshot(
-            snap => {
-                setAttendanceRecords(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        let isMounted = true;
+
+        const loadAttendance = async () => {
+            setLoading(true);
+            if (isMockMode) {
+                setAttendanceRecords([
+                    { studentId: '1', status: 'Hadir', checkIn: '07:12:05', duha: '08:05:00', zuhur: '12:30:00', ashar: '15:45:00', checkOut: '16:05:00' },
+                    { studentId: '2', status: 'Terlambat', checkIn: '07:39:21 | +9', duha: '08:15:00', zuhur: '12:35:00', ashar: null, checkOut: null },
+                    { studentId: '4', status: 'Haid', checkIn: null, duha: '08:10:00 | H', zuhur: '12:30:00 | H', ashar: '15:40:00 | H', checkOut: '15:55:00 | -5' }
+                ]);
                 setLoading(false);
-            },
-            err => {
-                console.warn("Firestore: Gagal memuat laporan kehadiran.", err.message);
-                setLoading(false);
+                return;
             }
-        );
-        if (isMockMode) {
-            setAttendanceRecords([
-                { studentId: '1', status: 'Hadir', checkIn: '07:12:05', duha: '08:05:00', zuhur: '12:30:00', ashar: '15:45:00', checkOut: '16:05:00' },
-                { studentId: '2', status: 'Terlambat', checkIn: '07:39:21 | +9', duha: '08:15:00', zuhur: '12:35:00', ashar: null, checkOut: null },
-                { studentId: '4', status: 'Haid', checkIn: null, duha: '08:10:00 | H', zuhur: '12:30:00 | H', ashar: '15:40:00 | H', checkOut: '15:55:00 | -5' }
-            ]);
-            setLoading(false);
-        }
-        return () => unsub();
+
+            try {
+                const snap = await db!.collection('attendance').where('date', '==', selectedDate).get();
+                if (!isMounted) return;
+                setAttendanceRecords(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            } catch (err: any) {
+                if (isMounted) {
+                    console.warn("Firestore: Gagal memuat laporan kehadiran.", err.message);
+                }
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        };
+
+        loadAttendance();
+
+        return () => {
+            isMounted = false;
+        };
     }, [selectedDate]);
 
     const stats = useMemo(() => {
@@ -111,6 +123,24 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
             else alpha++;
         });
         return { total: filtered.length, hadir, izin, sakit, alpha };
+    }, [allStudents, attendanceRecords, selectedClassFilter]);
+
+    const sessionStats = useMemo(() => {
+        const filtered = allStudents.filter(s => selectedClassFilter === 'All' || s.tingkatRombel === selectedClassFilter);
+        const attMap = new Map<string, any>(attendanceRecords.map(r => [r.studentId, r]));
+        const totals = { masuk: 0, duha: 0, zuhur: 0, ashar: 0, pulang: 0 };
+
+        filtered.forEach((student) => {
+            const att = attMap.get(student.id!);
+            if (!att) return;
+            if (att.checkIn) totals.masuk++;
+            if (att.duha) totals.duha++;
+            if (att.zuhur) totals.zuhur++;
+            if (att.ashar) totals.ashar++;
+            if (att.checkOut) totals.pulang++;
+        });
+
+        return totals;
     }, [allStudents, attendanceRecords, selectedClassFilter]);
 
     const displayData = useMemo(() => {
@@ -346,6 +376,19 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
                     <ReportStatCard val={stats.alpha} label="Alpha" color="text-rose-600" bg="bg-rose-50" icon={XCircleIcon} />
                 </div>
 
+                <div className="px-3 pb-2">
+                    <div className="bg-white dark:bg-[#0B1121] p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-2">Laporan Harian 5 Sesi</p>
+                        <div className="grid grid-cols-5 gap-2">
+                            <SessionStatPill label="Masuk" value={sessionStats.masuk} />
+                            <SessionStatPill label="Duha" value={sessionStats.duha} />
+                            <SessionStatPill label="Zuhur" value={sessionStats.zuhur} />
+                            <SessionStatPill label="Ashar" value={sessionStats.ashar} />
+                            <SessionStatPill label="Pulang" value={sessionStats.pulang} />
+                        </div>
+                    </div>
+                </div>
+
                 {/* --- TIGHT FILTERS --- */}
                 <div className="px-3 mb-3">
                     <div className="bg-white dark:bg-[#0B1121] p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -513,6 +556,13 @@ const ReportStatCard = ({ val, label, color, bg, icon: Icon }: any) => (
         </div>
         <p className={`text-sm font-black ${color} tracking-tighter leading-none`}>{val}</p>
         <p className="text-[7px] font-black text-slate-400 uppercase tracking-tighter mt-1 leading-none">{label}</p>
+    </div>
+);
+
+const SessionStatPill = ({ label, value }: { label: string; value: number }) => (
+    <div className="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-1 py-2 text-center">
+        <p className="text-xs font-black text-slate-800 dark:text-slate-100 leading-none">{value}</p>
+        <p className="text-[7px] mt-1 font-black uppercase tracking-tight text-slate-500">{label}</p>
     </div>
 );
 
