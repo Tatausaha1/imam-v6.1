@@ -93,16 +93,15 @@ const CreateAccount: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ o
 
   // Filter students/teachers yang belum punya linked account
   const availableLinks = useMemo(() => {
-    if (formData.role === UserRole.SISWA) {
+    if ([UserRole.SISWA, UserRole.ORANG_TUA].includes(formData.role)) {
         return students.filter(s => !s.isClaimed && !s.authUid);
-    } else {
-        return teachers.filter(t => !t.linkedUserId);
     }
+    return teachers.filter(t => !t.linkedUserId);
   }, [formData.role, students, teachers]);
 
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    const isPublicRole = [UserRole.SISWA, UserRole.GURU, UserRole.WALI_KELAS, UserRole.STAF, UserRole.KETUA_KELAS].includes(formData.role);
+    const isPublicRole = [UserRole.SISWA, UserRole.ORANG_TUA, UserRole.GURU, UserRole.WALI_KELAS, UserRole.STAF, UserRole.KETUA_KELAS].includes(formData.role);
 
     if (!formData.email || !formData.password || (isPublicRole && !formData.linkId)) {
         toast.error("Mohon pilih data induk yang akan dihubungkan.");
@@ -148,7 +147,15 @@ const CreateAccount: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ o
                     accountStatus: 'Active',
                     email: formData.email 
                 });
-            } else if (![UserRole.DEVELOPER, UserRole.ADMIN].includes(formData.role)) {
+            } else if (formData.role === UserRole.ORANG_TUA) {
+                userDoc.studentId = formData.linkId;
+                const studentRef = db!.collection('students').doc(formData.linkId);
+                batch.update(studentRef, {
+                    parentUserId: uid,
+                    parentEmail: formData.email,
+                    parentLinkedAt: new Date().toISOString()
+                });
+            } else if (![UserRole.DEVELOPER, UserRole.ADMIN, UserRole.ORANG_TUA].includes(formData.role)) {
                 userDoc.teacherId = formData.linkId;
                 const teacherRef = db!.collection('teachers').doc(formData.linkId);
                 batch.update(teacherRef, { 
@@ -322,7 +329,7 @@ const CreateAccount: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ o
                             <ShieldCheckIcon className="w-3.5 h-3.5" /> Pilih Peran Otoritas
                         </label>
                         <div className="grid grid-cols-3 gap-2">
-                            {[UserRole.ADMIN, UserRole.WALI_KELAS, UserRole.GURU, UserRole.STAF, UserRole.SISWA, UserRole.KEPALA_MADRASAH].map(r => (
+                            {[UserRole.ADMIN, UserRole.WALI_KELAS, UserRole.GURU, UserRole.STAF, UserRole.SISWA, UserRole.ORANG_TUA, UserRole.KEPALA_MADRASAH].map(r => (
                                 <button key={r} type="button" onClick={() => setFormData({...formData, role: r as UserRole, linkId: '', displayName: ''})} className={`py-3.5 rounded-xl text-[8px] font-black uppercase border transition-all ${formData.role === r ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-slate-50 dark:bg-slate-900 border-transparent text-slate-400'}`}>{r}</button>
                             ))}
                         </div>
@@ -336,19 +343,19 @@ const CreateAccount: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ o
                             <div className="relative group">
                                 <select required value={formData.linkId} onChange={e => {
                                     const id = e.target.value;
-                                    const sel = formData.role === UserRole.SISWA ? students.find(s=>s.id===id) : teachers.find(t=>t.id===id);
+                                    const sel = [UserRole.SISWA, UserRole.ORANG_TUA].includes(formData.role) ? students.find(s=>s.id===id) : teachers.find(t=>t.id===id);
                                     setFormData({
                                         ...formData, 
                                         linkId: id, 
-                                        displayName: formData.role === UserRole.SISWA ? (sel as Student)?.namaLengkap : (sel as Teacher)?.name, 
-                                        idUnik: formData.role === UserRole.SISWA ? (sel as Student)?.idUnik : (sel as Teacher)?.nip 
+                                        displayName: [UserRole.SISWA, UserRole.ORANG_TUA].includes(formData.role) ? (sel as Student)?.namaLengkap : (sel as Teacher)?.name, 
+                                        idUnik: [UserRole.SISWA, UserRole.ORANG_TUA].includes(formData.role) ? (sel as Student)?.idUnik : (sel as Teacher)?.nip 
                                     });
                                 }} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-[11px] font-black outline-none border border-slate-200 dark:border-slate-700 appearance-none cursor-pointer uppercase shadow-inner group-focus-within:border-indigo-500 transition-all">
                                     <option value="">-- PILIH DATA BELUM TERHUBUNG --</option>
                                     {availableLinks.length > 0 ? (
-                                        formData.role === UserRole.SISWA ? 
-                                        students.filter(s => !s.isClaimed).map(s => <option key={s.id} value={s.id!}>{s.namaLengkap} ({s.idUnik})</option>) : 
-                                        teachers.filter(t => !t.linkedUserId).map(t => <option key={t.id} value={t.id!}>{t.name} ({t.nip})</option>)
+                                        [UserRole.SISWA, UserRole.ORANG_TUA].includes(formData.role) ? 
+                                        (availableLinks as Student[]).map(s => <option key={s.id} value={s.id!}>{s.namaLengkap} ({s.idUnik})</option>) : 
+                                        (availableLinks as Teacher[]).map(t => <option key={t.id} value={t.id!}>{t.name} ({t.nip})</option>)
                                     ) : (
                                         <option disabled value="">TIDAK ADA DATA TERSEDIA</option>
                                     )}
@@ -387,7 +394,7 @@ const CreateAccount: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ o
 
                     <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800 flex gap-3">
                         <InfoIcon className="w-5 h-5 text-indigo-500 shrink-0" />
-                        <p className="text-[9px] text-indigo-700 dark:text-indigo-300 font-bold uppercase leading-relaxed tracking-tight">Menghubungkan akun akan secara otomatis memperbarui status klaim (isClaimed) pada data induk agar tidak dapat didaftarkan kembali oleh user lain.</p>
+                        <p className="text-[9px] text-indigo-700 dark:text-indigo-300 font-bold uppercase leading-relaxed tracking-tight">Menghubungkan akun akan secara otomatis memperbarui status keterkaitan pada data induk (Siswa/Guru/Orang Tua) agar relasi akun terjaga.</p>
                     </div>
 
                     <button type="submit" disabled={saving} className="w-full py-4 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-[0.3em] shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-50 transition-all">
