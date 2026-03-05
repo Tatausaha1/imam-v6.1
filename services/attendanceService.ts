@@ -5,21 +5,12 @@
  */
 
 import firebase from 'firebase/compat/app';
-import { db, isMockMode } from './firebase';
+import { db } from './firebase';
 import { format } from 'date-fns';
-import { Student, AttendanceStatus } from '../types';
+import { Student } from '../types';
 
 export type AttendanceSession = 'Masuk' | 'Duha' | 'Zuhur' | 'Ashar' | 'Pulang';
 
-interface ScanResult {
-    success: boolean;
-    message: string;
-    student?: Student;
-    timestamp?: string;
-    statusRecorded?: AttendanceStatus;
-}
-
-const COLLECTION_ATTENDANCE = 'attendance';
 const COLLECTION_STUDENTS = 'students';
 const COLLECTION_ACADEMIC_YEARS = 'academic_years';
 
@@ -74,32 +65,20 @@ export const recordAttendanceByScan = async (rawCode: string, session: Attendanc
     let pulangLimitStr = config?.pulangLimit || "16:00";
     if (currentDay === 5) pulangLimitStr = config?.pulangLimitJumat || "11:30";
     const pulangLimit = toMin(pulangLimitStr);
+const COLLECTION_ATTENDANCE = 'attendance';
+const STATS_DOC = 'stats/summary';
 
-    const isPrayerSession = ['Duha', 'Zuhur', 'Ashar'].includes(session);
+/**
+ * Mencatat kehadiran siswa berdasarkan kode QR idUnik.
+ * Mendukung mode offline melalui Firestore Persistence.
+ */
+export const recordAttendanceByScan = async (code: string, session: AttendanceSession, isHaid: boolean = false): Promise<any> => {
+    const cleanId = String(code || '').replace(/\s/g, '').trim();
+    if (!cleanId || !db) return { success: false, message: "KODE TIDAK VALID" };
+
+    const today = format(new Date(), "yyyy-MM-dd");
+    const nowTime = format(new Date(), "HH:mm:ss");
     
-    let nowValue = nowFull;
-    let meta = "";
-
-    if (isHaid && isPrayerSession) {
-        meta = "H";
-    } else if (session === 'Masuk' && currentMinutes > masukLimit) {
-        meta = `+${currentMinutes - masukLimit}`;
-    } else if (session === 'Pulang' && currentMinutes < pulangLimit) {
-        meta = `-${pulangLimit - currentMinutes}`;
-    }
-
-    if (meta) {
-        nowValue = `${nowFull} | ${meta}`;
-    }
-    
-    const fieldMap: Record<string, string> = {
-        'Masuk': 'checkIn', 'Duha': 'duha', 'Zuhur': 'zuhur', 'Ashar': 'ashar', 'Pulang': 'checkOut'
-    };
-    const fieldName = fieldMap[session];
-
-    if (isMockMode) return { success: true, message: "BERHASIL (MOCK)", student: { namaLengkap: "Siswa Simulasi" } as any };
-    if (!db) return { success: false, message: "DATABASE OFFLINE" };
-
     try {
         let studentData: Student | null = studentLookupCache.get(code) || null;
         
@@ -127,9 +106,26 @@ export const recordAttendanceByScan = async (rawCode: string, session: Attendanc
                     }
                 }
             }
+        // --- STRATEGI IDENTIFIKASI ---
+        let studentData: Student | null = null;
+        let snap = await db.collection(COLLECTION_STUDENTS).where('idUnik', '==', cleanId).limit(1).get();
+            
+        if (snap.empty && /^\d+$/.test(cleanId)) {
+            snap = await db.collection(COLLECTION_STUDENTS).where('idUnik', '==', Number(cleanId)).limit(1).get();
         }
 
-        if (!studentData) return { success: false, message: `ID "${code}" TIDAK TERDAFTAR` };
+        if (snap.empty) {
+            snap = await db.collection(COLLECTION_STUDENTS).where('nisn', '==', cleanId).limit(1).get();
+        }
+
+        if (snap.empty) {
+            const docSnap = await db.collection(COLLECTION_STUDENTS).doc(cleanId).get();
+            if (docSnap.exists) studentData = { id: docSnap.id, ...docSnap.data() } as Student;
+        } else {
+            studentData = { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
+        }
+
+        if (!studentData) return { success: false, message: "ID TIDAK TERDAFTAR" };
 
         studentLookupCache.set(code, studentData);
         if (studentData.idUnik) studentLookupCache.set(studentData.idUnik, studentData);
@@ -141,36 +137,53 @@ export const recordAttendanceByScan = async (rawCode: string, session: Attendanc
         const attendanceRef = db.collection(COLLECTION_ATTENDANCE).doc(attendanceId);
         const docSnapshot = await attendanceRef.get();
         const currentData = docSnapshot?.exists ? docSnapshot.data() : null;
+        const attId = `${studentData.id}_${today}`;
+        const attRef = db.collection(COLLECTION_ATTENDANCE).doc(attId);
 
-        if (currentData && currentData[fieldName]) {
-            return { success: false, message: `SUDAH SCAN ${session.toUpperCase()}` };
-        }
+        const fieldMap: any = { 
+            'Masuk': 'checkIn', 
+            'Duha': 'duha', 
+            'Zuhur': 'zuhur', 
+            'Ashar': 'ashar', 
+            'Pulang': 'checkOut' 
+        };
 
-        const updatePayload: any = { 
+        const batch = db.batch();
+        const payload: any = {
             studentId: studentData.id,
             studentName: studentData.namaLengkap,
-            class: studentData.tingkatRombel,
-            idUnik: studentData.idUnik || studentData.nisn || code,
+            class: studentData.tingkatRombel || '-',
             date: today,
-            lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
-            [fieldName]: nowValue
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         };
 
-        if (meta === "H") {
-            updatePayload.status = 'Haid';
-        } else if (!currentData?.status || currentData.status === 'Alpha' || currentData.status === 'Hadir') {
-            updatePayload.status = (session === 'Masuk' && currentMinutes > masukLimit) ? 'Terlambat' : 'Hadir';
+        if (isHaid) {
+            // MODE HAID: Otomatis isi semua sesi ibadah
+            payload.status = 'Haid';
+            payload.duha = `${nowTime} | H`;
+            payload.zuhur = `${nowTime} | H`;
+            payload.ashar = `${nowTime} | H`;
+        } else {
+            payload.status = 'Hadir';
+            payload[fieldMap[session]] = nowTime;
         }
 
-        await attendanceRef.set(updatePayload, { merge: true });
+        batch.set(attRef, payload, { merge: true });
 
-        return { 
-            success: true, 
-            message: meta === 'H' ? `${session.toUpperCase()} (HAID)` : `${session.toUpperCase()} BERHASIL`, 
-            student: studentData 
-        };
+        // Update Statistik Presensi Global
+        if (session === 'Masuk' && !isHaid) {
+            batch.set(db.doc(STATS_DOC), {
+                dailyStats: {
+                    [today]: { presentCount: firebase.firestore.FieldValue.increment(1) }
+                }
+            }, { merge: true });
+        }
+
+        await batch.commit();
+        return { success: true, message: "ABSEN BERHASIL", student: studentData };
+
     } catch (error: any) {
-        console.error("Attendance Error:", error);
-        return { success: false, message: "ERROR ENGINE DATABASE" };
+        console.error("Attendance Sync Error:", error);
+        return { success: false, message: "SYNC OFFLINE AKTIF" };
     }
 };

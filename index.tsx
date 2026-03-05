@@ -1,9 +1,6 @@
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
- * Developed by: Akhmad Arifin (Lead Developer & System Architect)
- * NIP: 19901004 202521 1012
- * Role: Fullstack & UI/UX Engineer
  */
 
 import React from 'react';
@@ -13,6 +10,16 @@ import App from './components/App';
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
+}
+
+// Registrasi Service Worker untuk Fitur Instalasi (PWA)
+// Folder public akan dipindahkan ke root '/' saat build di Vercel/Vite
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(reg => console.log('IMAM PWA: Service Worker Registered'))
+      .catch(err => console.log('IMAM PWA: Service Worker Registration Failed', err));
+  });
 }
 
 const root = createRoot(rootElement);

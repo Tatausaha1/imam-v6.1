@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ArrowLeftIcon } from './Icons';
 
@@ -28,11 +27,11 @@ const Layout: React.FC<LayoutProps> = ({
   customHeader
 }) => {
   return (
-    <div className={`flex flex-col h-full w-full bg-[#f8fafc] dark:bg-[#020617] transition-colors relative overflow-hidden ${className}`}>
+    <div className={`flex flex-col h-full w-full bg-[#f8fafc] dark:bg-[#020617] transition-colors relative overflow-hidden pt-[env(safe-area-inset-top)] ${className}`}>
       
       {/* --- HEADER (SOLID COLOR - HIGH PERFORMANCE) --- */}
-      <header className="shrink-0 z-30 sticky top-0 safe-pt bg-white dark:bg-[#0B1121] border-b border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
-        <div className="relative z-10 flex items-center justify-between px-4 py-3 md:px-8 md:py-4 gap-4 max-w-7xl mx-auto w-full">
+      <header className="shrink-0 z-30 sticky top-0 bg-white dark:bg-[#0B1121] border-b border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
+        <div className="relative z-10 flex items-center justify-between px-4 py-3 md:px-8 md:py-4 gap-4 max-w-md md:max-w-4xl mx-auto w-full">
           
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {onBack && (
@@ -71,7 +70,7 @@ const Layout: React.FC<LayoutProps> = ({
 
       {/* --- MAIN CONTENT --- */}
       <main className={`flex-1 overflow-y-auto relative w-full z-10 scroll-smooth ${withBottomNav ? 'pb-32' : 'pb-12'}`}>
-        <div className="max-w-7xl mx-auto w-full h-full px-4 md:px-8 py-5">
+        <div className="max-w-md md:max-w-4xl mx-auto w-full h-full px-4 md:px-8 py-5">
             {children}
         </div>
       </main>
@@ -79,7 +78,7 @@ const Layout: React.FC<LayoutProps> = ({
       {/* --- FOOTER (SOLID) --- */}
       {footer && (
         <footer className="shrink-0 z-30 bg-white dark:bg-[#0B1121] border-t border-slate-200 dark:border-slate-800 p-4 md:px-8 pb-6 safe-pb transition-colors">
-          <div className="max-w-7xl mx-auto w-full">
+          <div className="max-w-md md:max-w-4xl mx-auto w-full">
             {footer}
           </div>
         </footer>

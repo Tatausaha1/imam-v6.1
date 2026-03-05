@@ -12,6 +12,11 @@ import {
   BriefcaseIcon, CalendarIcon, ArrowTrendingUpIcon, BuildingLibraryIcon,
   InfoIcon, XMarkIcon, CommandLineIcon, ClipboardDocumentListIcon, AcademicCapIcon,
   CogIcon, UserPlusIcon, HeadsetIcon, StarIcon, ClockIcon, ShieldCheckIcon,
+  HomeIcon, UserIcon, AppLogo, 
+  BookOpenIcon, EnvelopeIcon, UsersIcon,
+  BriefcaseIcon, CalendarIcon, BuildingLibraryIcon,
+  XMarkIcon, CommandLineIcon, ClipboardDocumentListIcon, AcademicCapIcon,
+  CogIcon, UserPlusIcon, HeadsetIcon, StarIcon, ShieldCheckIcon,
   IdentificationIcon, CameraIcon
 } from './Icons';
 
@@ -36,7 +41,7 @@ interface MenuSection {
     items: SidebarItem[];
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = UserRole.GURU, onLogout, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = UserRole.GURU, onClose }) => {
   
   const menuSections: MenuSection[] = [
     {
@@ -142,8 +147,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
         ))}
       </div>
 
-      {/* --- FOOTER SECTION: PROFILE & LOGOUT --- */}
-      <div className="p-4 border-t border-slate-50 dark:border-slate-800 mt-auto bg-slate-50/50 dark:bg-slate-900/50 flex flex-col gap-2">
+      {/* --- FOOTER SECTION: PROFILE ONLY --- */}
+      <div className="p-4 border-t border-slate-50 dark:border-slate-800 mt-auto bg-slate-50/50 dark:bg-slate-900/50 flex flex-col">
         <div 
             className="flex items-center gap-3 px-4 py-3 rounded-[1.5rem] bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm cursor-pointer group hover:border-indigo-200 transition-all" 
             onClick={() => { onNavigate(ViewState.PROFILE); if (onClose) onClose(); }}
@@ -156,18 +161,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userRole = U
                 <p className="text-[7px] text-slate-400 font-bold uppercase tracking-widest truncate leading-none">{userRole}</p>
             </div>
         </div>
-
-        {onLogout && (
-            <button 
-                onClick={() => { 
-                    if(window.confirm("Keluar dari aplikasi IMAM?")) onLogout(); 
-                }} 
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-[1.2rem] bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 font-black text-[9px] uppercase tracking-[0.15em] hover:bg-rose-100 dark:hover:bg-rose-900/40 active:scale-[0.98] transition-all border border-rose-100 dark:border-rose-900/30"
-            >
-                <LogOutIcon className="w-4 h-4 shrink-0" />
-                <span>Keluar Akun</span>
-            </button>
-        )}
       </div>
     </div>
   );

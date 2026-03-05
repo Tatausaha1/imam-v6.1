@@ -1,164 +1,147 @@
 
+/**
+ * @license
+ * IMAM System - Integrated Madrasah Academic Manager
+ */
+
+import firebase from 'firebase/compat/app';
 import { db, isMockMode } from './firebase';
 import { Student } from '../types';
 
 const COLLECTION_NAME = 'students';
+const STATS_DOC = 'stats/summary';
 
-export const getStudents = async (): Promise<Student[]> => {
-  if (isMockMode) return [];
+export const getStudentsPaginated = async (lastDoc: any = null, limitCount: number = 20): Promise<{data: Student[], lastVisible: any}> => {
+  if (isMockMode) return { data: [], lastVisible: null };
   try {
     if (!db) throw new Error("Database not initialized");
-    const snapshot = await db.collection(COLLECTION_NAME).orderBy('namaLengkap').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
-  } catch (error: any) {
-    console.error("Error fetching students:", error);
-    throw error;
-  }
+    let query = db.collection(COLLECTION_NAME).orderBy('namaLengkap').limit(limitCount);
+    if (lastDoc) query = query.startAfter(lastDoc);
+    const snapshot = await query.get();
+    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+    const lastVisible = snapshot.docs[snapshot.docs.length - 1];
+    return { data, lastVisible };
+  } catch (error: any) { throw error; }
 };
 
-/**
- * Menambahkan atau memperbarui siswa menggunakan idUnik sebagai Document ID (Primary Key)
- */
 export const addStudent = async (student: Student): Promise<void> => {
   if (isMockMode) return;
   try {
     if (!db) throw new Error("Database not initialized");
+    const cleanId = student.nisn || student.idUnik || db.collection(COLLECTION_NAME).doc().id;
     
-    // VALIDASI: idUnik wajib ada karena ini adalah Primary Key
-    const cleanId = student.idUnik ? String(student.idUnik).trim() : null;
+    const batch = db.batch();
+    const studentRef = db.collection(COLLECTION_NAME).doc(cleanId);
     
-    if (!cleanId) {
-        throw new Error("ID Unik wajib diisi sebagai Primary Key sistem.");
-    }
-    
-    await db.collection(COLLECTION_NAME).doc(cleanId).set({
+    batch.set(studentRef, {
         ...student,
-        idUnik: cleanId,
-        isClaimed: student.isClaimed || false,
-        authUid: student.authUid || "",
-        createdAt: student.createdAt || new Date().toISOString(),
+        idUnik: student.idUnik || cleanId,
+        createdAt: new Date().toISOString(),
         lastModified: new Date().toISOString()
     }, { merge: true });
-  } catch (error) {
-    console.error("Error adding student:", error);
-    throw error;
-  }
+
+    // Incremental Counter
+    batch.set(db.doc(STATS_DOC), {
+        totalStudents: firebase.firestore.FieldValue.increment(1)
+    }, { merge: true });
+
+    await batch.commit();
+  } catch (error) { throw error; }
 };
 
+// Fix: Added updateStudent function
 export const updateStudent = async (id: string, student: Partial<Student>): Promise<void> => {
+  if (isMockMode) return;
+  try {
+    if (!db) throw new Error("Database not initialized");
+    await db.collection(COLLECTION_NAME).doc(id).update({
+      ...student,
+      lastModified: new Date().toISOString()
+    });
+  } catch (error) { throw error; }
+};
+
+// Fix: Added moveStudentToCollection function for mutation/alumni workflows
+export const moveStudentToCollection = async (student: Student, targetCollection: string): Promise<void> => {
     if (isMockMode) return;
     try {
         if (!db) throw new Error("Database not initialized");
-        await db.collection(COLLECTION_NAME).doc(id).update({
-            ...student,
-            lastModified: new Date().toISOString()
-        });
-    } catch (error) {
-        console.error("Error updating student", error);
-        throw error;
-    }
-}
-
-export const deleteStudent = async (id: string): Promise<void> => {
-    if (isMockMode) return;
-    try {
-        if (!db) throw new Error("Database not initialized");
-        await db.collection(COLLECTION_NAME).doc(id).delete();
-    } catch (error) {
-        console.error("Error deleting student", error);
-        throw error;
-    }
-}
-
-/**
- * Memperbaiki data lama: Menambahkan isClaimed & authUid ke dokumen yang belum punya.
- */
-export const repairStudentDatabase = async (callback?: (progress: string) => void): Promise<number> => {
-    if (isMockMode || !db) return 0;
-    
-    try {
-        const snapshot = await db.collection(COLLECTION_NAME).get();
         const batch = db.batch();
-        let count = 0;
+        const oldRef = db.collection(COLLECTION_NAME).doc(student.id!);
+        const newRef = db.collection(targetCollection).doc(student.id!);
 
-        snapshot.docs.forEach(doc => {
-            const data = doc.data();
-            // Cek apakah field isClaimed atau authUid tidak ada
-            if (data.isClaimed === undefined || data.authUid === undefined) {
-                batch.set(doc.ref, {
-                    isClaimed: data.isClaimed ?? false,
-                    authUid: data.authUid ?? ""
-                }, { merge: true });
-                count++;
-            }
-        });
-
-        if (count > 0) {
-            if (callback) callback(`Mengirim batch ${count} dokumen...`);
-            await batch.commit();
-        }
-        
-        return count;
-    } catch (error) {
-        console.error("Repair Database Error:", error);
-        throw error;
-    }
-}
-
-/**
- * Memindahkan siswa ke koleksi lain (Alumni / Mutasi)
- */
-export const moveStudentToCollection = async (id: string, targetCollection: 'alumni' | 'mutasi', reason: string): Promise<void> => {
-    if (isMockMode) return;
-    try {
-        if (!db) throw new Error("Database not initialized");
-        
-        const studentRef = db.collection(COLLECTION_NAME).doc(id);
-        const snap = await studentRef.get();
-        
-        if (!snap.exists) throw new Error("Data siswa tidak ditemukan.");
-        
-        const data = snap.data() as Student;
-        const targetRef = db.collection(targetCollection).doc(id);
-        
-        await targetRef.set({
-            ...data,
-            status: targetCollection === 'alumni' ? 'Lulus' : 'Mutasi',
+        batch.set(newRef, { 
+            ...student, 
             movedAt: new Date().toISOString(),
-            moveReason: reason,
-            lastModified: new Date().toISOString()
+            status: targetCollection === 'alumni' ? 'Lulus' : 'Mutasi'
         });
+        batch.delete(oldRef);
         
-        await studentRef.delete();
-    } catch (error) {
-        console.error(`Error moving to ${targetCollection}:`, error);
-        throw error;
-    }
-}
+        // Update stats
+        batch.set(db.doc(STATS_DOC), {
+            totalStudents: firebase.firestore.FieldValue.increment(-1)
+        }, { merge: true });
 
+        await batch.commit();
+    } catch (error) { throw error; }
+};
+
+// Fix: Added bulkImportStudents function
 export const bulkImportStudents = async (students: Student[]): Promise<void> => {
   if (isMockMode) return;
   try {
     if (!db) throw new Error("Database not initialized");
     const batch = db.batch();
-    
     students.forEach(student => {
-      const cleanId = String(student.idUnik || '').trim();
-      if (cleanId) {
-          const ref = db!.collection(COLLECTION_NAME).doc(cleanId);
-          batch.set(ref, { 
-              ...student, 
-              idUnik: cleanId,
-              isClaimed: student.isClaimed || false,
-              authUid: student.authUid || "",
-              lastModified: new Date().toISOString()
-          }, { merge: true });
-      }
+      const cleanId = student.nisn || student.idUnik || db!.collection(COLLECTION_NAME).doc().id;
+      const ref = db!.collection(COLLECTION_NAME).doc(cleanId);
+      batch.set(ref, {
+          ...student,
+          idUnik: student.idUnik || cleanId,
+          createdAt: new Date().toISOString(),
+          lastModified: new Date().toISOString()
+      }, { merge: true });
     });
     
+    batch.set(db.doc(STATS_DOC), {
+        totalStudents: firebase.firestore.FieldValue.increment(students.length)
+    }, { merge: true });
+
     await batch.commit();
-  } catch (error) {
-    console.error("Error bulk importing:", error);
-    throw error;
-  }
+  } catch (error) { throw error; }
+};
+
+export const deleteStudent = async (id: string): Promise<void> => {
+    if (isMockMode) return;
+    try {
+        if (!db) throw new Error("Database not initialized");
+        const batch = db.batch();
+        batch.delete(db.collection(COLLECTION_NAME).doc(id));
+        batch.set(db.doc(STATS_DOC), {
+            totalStudents: firebase.firestore.FieldValue.increment(-1)
+        }, { merge: true });
+        await batch.commit();
+    } catch (error) { throw error; }
+}
+
+export const getStudents = async (): Promise<Student[]> => {
+  if (isMockMode) return [];
+  try {
+    if (!db) throw new Error("Database not initialized");
+    const snapshot = await db.collection(COLLECTION_NAME).limit(100).get();
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+  } catch (error) { return []; }
+};
+
+export const repairStudentDatabase = async (onProgress: (msg: string) => void): Promise<number> => {
+  if (isMockMode) return 0;
+  try {
+    if (!db) throw new Error("Database not initialized");
+    onProgress("Menghitung ulang statistik master...");
+    const snapshot = await db.collection(COLLECTION_NAME).get();
+    const total = snapshot.size;
+    await db.doc(STATS_DOC).set({ totalStudents: total }, { merge: true });
+    onProgress(`Statistik diperbarui: ${total} siswa.`);
+    return total;
+  } catch (error: any) { throw error; }
 };
