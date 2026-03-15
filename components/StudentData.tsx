@@ -214,15 +214,75 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
 
       {isModalOpen && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-              <div className="bg-white dark:bg-[#0B1121] w-full max-w-lg rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in duration-300">
-                  <h3 className="text-sm font-black uppercase tracking-widest mb-6">{editingId ? 'Edit Siswa' : 'Tambah Siswa'}</h3>
-                  <form onSubmit={handleSave} className="space-y-4">
-                      <input required type="text" placeholder="ID UNIK" value={formData.idUnik} onChange={e => setFormData({...formData, idUnik: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none" />
-                      <input required type="text" placeholder="NAMA LENGKAP" value={formData.namaLengkap} onChange={e => setFormData({...formData, namaLengkap: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none" />
-                      <div className="flex gap-3">
-                          <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl text-[10px] font-black uppercase">Batal</button>
-                          <button type="submit" disabled={saving} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-lg">
-                              {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : 'Simpan'}
+              <div className="bg-white dark:bg-[#0B1121] w-full max-w-3xl rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in duration-300 border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+                  <h3 className="text-sm font-black uppercase tracking-widest mb-1">{editingId ? 'Edit Data Siswa' : 'Tambah Data Siswa'}</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-6">Pastikan biodata sesuai dokumen resmi siswa.</p>
+
+                  <form onSubmit={handleSave} className="space-y-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">ID Unik</label>
+                              <input required type="text" placeholder="Contoh: 15012" value={formData.idUnik || ''} onChange={e => setFormData({...formData, idUnik: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800" />
+                          </div>
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">NISN</label>
+                              <input required type="text" placeholder="Contoh: 0086806447" value={formData.nisn || ''} onChange={e => setFormData({...formData, nisn: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800" />
+                          </div>
+                      </div>
+
+                      <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nama Lengkap</label>
+                          <input required type="text" placeholder="Nama siswa" value={formData.namaLengkap || ''} onChange={e => setFormData({...formData, namaLengkap: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800" />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Kelas</label>
+                              <select value={formData.tingkatRombel || ''} onChange={e => setFormData({...formData, tingkatRombel: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800">
+                                  <option value="">Pilih Kelas</option>
+                                  {availableClassFilters.map((kelas) => (<option key={kelas} value={kelas}>{kelas}</option>))}
+                              </select>
+                          </div>
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Jenis Kelamin</label>
+                              <select value={formData.jenisKelamin || 'Laki-laki'} onChange={e => setFormData({...formData, jenisKelamin: e.target.value as Student['jenisKelamin']})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800">
+                                  <option value="Laki-laki">Laki-laki</option>
+                                  <option value="Perempuan">Perempuan</option>
+                              </select>
+                          </div>
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Status</label>
+                              <select value={formData.status || 'Aktif'} onChange={e => setFormData({...formData, status: e.target.value as Student['status']})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800">
+                                  <option value="Aktif">Aktif</option>
+                                  <option value="Lulus">Lulus</option>
+                                  <option value="Mutasi">Mutasi</option>
+                                  <option value="Keluar">Keluar</option>
+                                  <option value="Nonaktif">Nonaktif</option>
+                              </select>
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">No. Telepon</label>
+                              <input type="text" placeholder="08xxxxxxxxxx" value={formData.noTelepon || ''} onChange={e => setFormData({...formData, noTelepon: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800" />
+                          </div>
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Email</label>
+                              <input type="email" placeholder="siswa@email.com" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800" />
+                          </div>
+                      </div>
+
+                      <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Alamat</label>
+                          <textarea rows={3} placeholder="Alamat domisili siswa" value={formData.alamat || ''} onChange={e => setFormData({...formData, alamat: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800 resize-none" />
+                      </div>
+
+                      <div className="flex gap-3 pt-2">
+                          <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-2xl text-[10px] font-black uppercase">Batal</button>
+                          <button type="submit" disabled={saving} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-lg flex items-center justify-center gap-2">
+                              {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <SaveIcon className="w-4 h-4" />}
+                              Simpan Perubahan
                           </button>
                       </div>
                   </form>
