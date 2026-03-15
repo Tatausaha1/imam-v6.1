@@ -17,11 +17,13 @@ if (!rootElement) {
 if ('serviceWorker' in navigator) {
   let isRefreshing = false;
 
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
+  const onControllerChange = () => {
     if (isRefreshing) return;
     isRefreshing = true;
     window.location.reload();
-  });
+  };
+
+  navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
 
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js')
@@ -29,6 +31,8 @@ if ('serviceWorker' in navigator) {
         const requestImmediateActivation = () => {
           if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
         };
+
+        const triggerUpdateCheck = () => reg.update().catch(() => undefined);
 
         requestImmediateActivation();
 
@@ -43,19 +47,13 @@ if ('serviceWorker' in navigator) {
           });
         });
 
-        const triggerUpdateCheck = () => reg.update().catch(() => undefined);
-
-        setInterval(() => {
-          triggerUpdateCheck();
-        }, 60 * 60 * 1000);
+        setInterval(triggerUpdateCheck, 60 * 60 * 1000);
 
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') triggerUpdateCheck();
         });
 
-        window.addEventListener('online', () => {
-          triggerUpdateCheck();
-        });
+        window.addEventListener('online', triggerUpdateCheck);
 
         console.log('IMAM PWA: Service Worker Registered');
       })

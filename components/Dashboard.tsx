@@ -31,72 +31,71 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
   const isSiswa = userRole === UserRole.SISWA;
 
   useEffect(() => {
-    const fetchData = async () => {
-        setLoading(true);
-        if (isMockMode) {
-            setTimeout(() => {
-                setStats({ students: 842, teachers: 56, attendanceToday: 92, newLetters: 12 });
-                setMyAttendance({ status: 'Hadir', checkIn: '07:15' });
-                setLoading(false);
-            }, 500);
-            return;
-        }
+    setLoading(true);
 
-        if (auth.currentUser && db) {
-            setUserName(auth.currentUser.displayName || 'Pengguna');
-            const todayStr = format(new Date(), 'yyyy-MM-dd');
+    if (isMockMode) {
+      const timer = setTimeout(() => {
+        setStats({ students: 842, teachers: 56, attendanceToday: 92, newLetters: 12 });
+        setMyAttendance({ status: 'Hadir', checkIn: '07:15' });
+        setLoading(false);
+      }, 500);
 
-            const unsubStudents = db.collection('students').where('status', '==', 'Aktif').onSnapshot((snap) => {
-                setStats(prev => ({ ...prev, students: snap.size }));
-            });
+      return () => clearTimeout(timer);
+    }
 
-            const unsubTeachers = db.collection('teachers').onSnapshot((snap) => {
-                setStats(prev => ({ ...prev, teachers: snap.size }));
-            });
+    if (!auth.currentUser || !db) {
+      setLoading(false);
+      return;
+    }
 
-            const unsubAttendance = db.collection('attendance').where('date', '==', todayStr).onSnapshot((snap) => {
-                const presentCount = snap.docs.filter(d => {
-                    const data = d.data();
-                    return data.status === 'Hadir' || data.status === 'Haid';
-                }).length;
+    setUserName(auth.currentUser.displayName || 'Pengguna');
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-                setStats(prev => {
-                    const percent = prev.students > 0 ? Math.round((presentCount / prev.students) * 100) : 0;
-                    return { ...prev, attendanceToday: percent };
-                });
-                setLoading(false);
-            }, () => setLoading(false));
+    const unsubscribers: Array<() => void> = [];
 
-            const unsubLetters = db.collection('letters').where('status', '==', 'Pending').onSnapshot((snap) => {
-                setStats(prev => ({ ...prev, newLetters: snap.size }));
-            });
+    unsubscribers.push(
+      db.collection('students').where('status', '==', 'Aktif').onSnapshot((snap) => {
+        setStats(prev => ({ ...prev, students: snap.size }));
+      })
+    );
 
-            if (isSiswa) {
-                const attId = `${auth.currentUser.uid}_${todayStr}`;
-                db.collection('attendance').doc(attId).get().then((myAttDoc) => {
-                    if (myAttDoc.exists) setMyAttendance(myAttDoc.data());
-                });
-            }
+    unsubscribers.push(
+      db.collection('teachers').onSnapshot((snap) => {
+        setStats(prev => ({ ...prev, teachers: snap.size }));
+      })
+    );
 
-            return () => {
-                unsubStudents();
-                unsubTeachers();
-                unsubAttendance();
-                unsubLetters();
-            };
-        }
+    unsubscribers.push(
+      db.collection('attendance').where('date', '==', todayStr).onSnapshot((snap) => {
+        const presentCount = snap.docs.filter((d) => {
+          const data = d.data();
+          return data.status === 'Hadir' || data.status === 'Haid';
+        }).length;
+
+        setStats((prev) => {
+          const percent = prev.students > 0 ? Math.round((presentCount / prev.students) * 100) : 0;
+          return { ...prev, attendanceToday: percent };
+        });
 
         setLoading(false);
-        return () => undefined;
-    };
+      }, () => setLoading(false))
+    );
 
-    let cleanup: (() => void) | undefined;
-    fetchData().then((fn) => {
-        if (typeof fn === 'function') cleanup = fn;
-    });
+    unsubscribers.push(
+      db.collection('letters').where('status', '==', 'Pending').onSnapshot((snap) => {
+        setStats(prev => ({ ...prev, newLetters: snap.size }));
+      })
+    );
+
+    if (isSiswa) {
+      const attId = `${auth.currentUser.uid}_${todayStr}`;
+      db.collection('attendance').doc(attId).get().then((myAttDoc) => {
+        if (myAttDoc.exists) setMyAttendance(myAttDoc.data());
+      }).catch(() => undefined);
+    }
 
     return () => {
-        if (cleanup) cleanup();
+      unsubscribers.forEach((unsub) => unsub());
     };
   }, [userRole, isSiswa]);
 
