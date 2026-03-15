@@ -17,13 +17,6 @@ if (!rootElement) {
 if ('serviceWorker' in navigator) {
   let isRefreshing = false;
 
-  const onControllerChange = () => {
-    if (isRefreshing) return;
-    isRefreshing = true;
-    window.location.reload();
-  };
-
-  navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (isRefreshing) return;
     isRefreshing = true;
@@ -36,8 +29,6 @@ if ('serviceWorker' in navigator) {
         const requestImmediateActivation = () => {
           if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
         };
-
-        const triggerUpdateCheck = () => reg.update().catch(() => undefined);
 
         requestImmediateActivation();
 
@@ -52,13 +43,6 @@ if ('serviceWorker' in navigator) {
           });
         });
 
-        setInterval(triggerUpdateCheck, 60 * 60 * 1000);
-
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') triggerUpdateCheck();
-        });
-
-        window.addEventListener('online', triggerUpdateCheck);
         setInterval(() => {
           reg.update();
         }, 60 * 60 * 1000);

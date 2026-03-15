@@ -1,21 +1,10 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "vite",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "rewrites": [
-    {
-      "source": "/((?!api|assets|.*\\..*).*)",
-      "destination": "/index.html"
-    }
-  ],
   "headers": [
     {
       "source": "/service-worker.js",
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
           "value": "no-store, no-cache, must-revalidate, proxy-revalidate"
         }
       ]
@@ -34,13 +23,6 @@
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "public, max-age=3600"
-        }
-      ]
-    }
-  ],
-  "cleanUrls": false,
-  "trailingSlash": false
           "value": "no-cache"
         }
       ]

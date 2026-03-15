@@ -34,7 +34,6 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
   // State Filter
   const [globalSearch, setGlobalSearch] = useState('');
   const [filterLevel, setFilterLevel] = useState('All');
-  const [filterKelas, setFilterKelas] = useState('All');
   const [filterKelas, setFilterKelas] = useState('10 A');
   const [filterStatus, setFilterStatus] = useState('All');
 
@@ -101,13 +100,6 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
     });
   }, [students, globalSearch, filterLevel, filterStatus, filterKelas]);
 
-
-  const availableClassFilters = useMemo(() => {
-    const fromMaster = classList.filter(Boolean);
-    const fromStudents = Array.from(new Set(students.map(s => s.tingkatRombel).filter(Boolean) as string[]));
-    return Array.from(new Set([...fromMaster, ...fromStudents])).sort();
-  }, [classList, students]);
-
   const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
       setSaving(true);
@@ -123,7 +115,6 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
   const canManage = userRole === UserRole.ADMIN || userRole === UserRole.DEVELOPER;
 
   return (
-    <Layout title="Data Induk Siswa" subtitle={filterKelas === 'All' ? 'Filter Semua Kelas' : `Filter Kelas ${filterKelas}`} icon={UsersGroupIcon} onBack={onBack}>
     <Layout title="Data Induk Siswa" subtitle={`Filter Kelas ${filterKelas}`} icon={UsersGroupIcon} onBack={onBack}>
       <div className="p-4 lg:p-6 pb-40 space-y-6">
         
@@ -145,10 +136,6 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
                     onChange={e => setFilterKelas(e.target.value)}
                     className="px-3 py-3 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-200 rounded-2xl text-[10px] font-black uppercase border border-slate-200 dark:border-slate-700 outline-none"
                 >
-                    <option value="All">Semua Kelas</option>
-                    {availableClassFilters.map((kelas) => (
-                      <option key={kelas} value={kelas}>{kelas}</option>
-                    ))}
                     <option value="10 A">Kelas 10 A</option>
                 </select>
                 {canManage && (
@@ -159,7 +146,6 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
         </div>
 
         <div className="flex items-center">
-            <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-wider">Filter Aktif: {filterKelas === 'All' ? 'Semua Kelas' : `Kelas ${filterKelas}`}</span>
             <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-wider">Filter Aktif: Kelas {filterKelas}</span>
         </div>
 

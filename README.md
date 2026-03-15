@@ -27,16 +27,7 @@ Saat mengimpor repository ke Vercel, pastikan pengaturan **Build & Development S
 - **Output Directory**: `dist`
 - **Install Command**: `npm install`
 
-### 2. Auto Deploy ke Vercel (Direkomendasikan)
-Agar update aplikasi langsung ter-hosting otomatis:
-- Hubungkan repository GitHub ke project Vercel.
-- Set **Production Branch** ke `main` (atau branch utama Anda).
-- Setiap `git push` ke branch tersebut akan memicu build dan deploy otomatis.
-- File `vercel.json` sudah disiapkan untuk:
-  - SPA rewrite ke `index.html`,
-  - cache policy khusus `service-worker.js` agar update PWA lebih cepat terbaca browser.
-
-### 3. Environment Variables
+### 2. Environment Variables
 Tambahkan variabel berikut di **Settings > Environment Variables**:
 | Key | Value |
 |---|---|

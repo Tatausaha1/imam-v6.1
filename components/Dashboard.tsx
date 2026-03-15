@@ -38,59 +38,13 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleTheme, isDarkTheme }) => {
   const [userName, setUserName] = useState<string>('Pengguna');
-  const [stats, setStats] = useState({ students: 0, teachers: 0, attendanceToday: 0, newLetters: 0 });
+  const [stats, setStats] = useState({ students: 0, teachers: 0, attendanceToday: 0 });
   const [loading, setLoading] = useState(true);
   const [myAttendance, setMyAttendance] = useState<any>(null);
 
   const isSiswa = userRole === UserRole.SISWA;
 
   useEffect(() => {
-    setLoading(true);
-
-    if (isMockMode) {
-      const timer = setTimeout(() => {
-        setStats({ students: 842, teachers: 56, attendanceToday: 92, newLetters: 12 });
-        setMyAttendance({ status: 'Hadir', checkIn: '07:15' });
-        setLoading(false);
-      }, 500);
-
-      return () => clearTimeout(timer);
-    }
-
-    if (!auth.currentUser || !db) {
-      setLoading(false);
-      return;
-    }
-
-    setUserName(auth.currentUser.displayName || 'Pengguna');
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-
-    const unsubscribers: Array<() => void> = [];
-
-    unsubscribers.push(
-      db.collection('students').where('status', '==', 'Aktif').onSnapshot((snap) => {
-        setStats(prev => ({ ...prev, students: snap.size }));
-      })
-    );
-
-    unsubscribers.push(
-      db.collection('teachers').onSnapshot((snap) => {
-        setStats(prev => ({ ...prev, teachers: snap.size }));
-      })
-    );
-
-    unsubscribers.push(
-      db.collection('attendance').where('date', '==', todayStr).onSnapshot((snap) => {
-        const presentCount = snap.docs.filter((d) => {
-          const data = d.data();
-          return data.status === 'Hadir' || data.status === 'Haid';
-        }).length;
-
-        setStats((prev) => {
-          const percent = prev.students > 0 ? Math.round((presentCount / prev.students) * 100) : 0;
-          return { ...prev, attendanceToday: percent };
-        });
-
     if (!auth?.currentUser && !isMockMode) return;
 
     if (isMockMode) {
@@ -227,24 +181,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
             } catch (e) {}
         }
         setLoading(false);
-      }, () => setLoading(false))
-    );
-
-    unsubscribers.push(
-      db.collection('letters').where('status', '==', 'Pending').onSnapshot((snap) => {
-        setStats(prev => ({ ...prev, newLetters: snap.size }));
-      })
-    );
-
-    if (isSiswa) {
-      const attId = `${auth.currentUser.uid}_${todayStr}`;
-      db.collection('attendance').doc(attId).get().then((myAttDoc) => {
-        if (myAttDoc.exists) setMyAttendance(myAttDoc.data());
-      }).catch(() => undefined);
-    }
-
-    return () => {
-      unsubscribers.forEach((unsub) => unsub());
     };
     fetchAllData();
   }, [userRole, isWaliKelas, isStaffAction, isKamad]);
@@ -375,10 +311,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                        <StatCard icon={UsersGroupIcon} label="Siswa Aktif" val={loading ? "..." : stats.students} color="text-indigo-600" bg="bg-indigo-50" />
-                        <StatCard icon={AcademicCapIcon} label="Total Guru" val={loading ? "..." : stats.teachers} color="text-emerald-600" bg="bg-emerald-50" />
-                        <StatCard icon={CheckCircleIcon} label="Kehadiran" val={loading ? "..." : `${stats.attendanceToday}%`} color="text-rose-600" bg="bg-rose-50" />
-                        <StatCard icon={EnvelopeIcon} label="Surat Baru" val={loading ? "..." : stats.newLetters} color="text-amber-600" bg="bg-amber-50" />
+                        <StatCard icon={UsersGroupIcon} label="Siswa Aktif" val={stats.students} color="text-indigo-600" bg="bg-indigo-50" />
+                        <StatCard icon={AcademicCapIcon} label="Total Guru" val={stats.teachers} color="text-emerald-600" bg="bg-emerald-50" />
+                        <StatCard icon={CheckCircleIcon} label="Kehadiran" val={`${stats.attendanceToday}%`} color="text-rose-600" bg="bg-rose-50" />
+                        <StatCard icon={EnvelopeIcon} label="Surat Baru" val="12" color="text-amber-600" bg="bg-amber-50" />
                     </div>
                 )}
             </section>
