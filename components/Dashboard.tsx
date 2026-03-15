@@ -51,8 +51,84 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
     }
 
     setUserName(currentUser.displayName || 'Pengguna');
-
     const unsubscribers: Array<() => void> = [];
+
+    if (isSiswa) {
+      let isCancelled = false;
+
+      const loadStudentDashboard = async () => {
+        try {
+          const userDoc = await db.collection('users').doc(currentUser.uid).get();
+          const userData = userDoc.exists ? userDoc.data() : null;
+
+          let studentId = userData?.studentId as string | undefined;
+          let studentName = userData?.displayName as string | undefined;
+
+          if (!studentId && currentUser.email) {
+            const byEmail = await db.collection('students').where('email', '==', currentUser.email).limit(1).get();
+            if (!byEmail.empty) {
+              studentId = byEmail.docs[0].id;
+              studentName = byEmail.docs[0].data().namaLengkap;
+            }
+          }
+
+          if (!studentId && currentUser.email?.endsWith('@siswa.imam.sch.id')) {
+            const nisn = currentUser.email.split('@')[0];
+            const byNisn = await db.collection('students').where('nisn', '==', nisn).limit(1).get();
+            if (!byNisn.empty) {
+              studentId = byNisn.docs[0].id;
+              studentName = byNisn.docs[0].data().namaLengkap;
+            }
+          }
+
+          if (studentName && !isCancelled) {
+            setUserName(studentName);
+          }
+
+          if (!studentId) {
+            if (!isCancelled) setLoading(false);
+            return;
+          }
+
+          const attDocId = `${studentId}_${todayStr}`;
+          const unsubMyAttendance = db.collection('attendance').doc(attDocId).onSnapshot(async (docSnap) => {
+            if (isCancelled) return;
+
+            if (docSnap.exists) {
+              setMyAttendance(docSnap.data());
+              setLoading(false);
+              return;
+            }
+
+            const fallback = await db.collection('attendance')
+              .where('studentId', '==', studentId)
+              .where('date', '==', todayStr)
+              .limit(1)
+              .get();
+
+            if (!fallback.empty) {
+              setMyAttendance(fallback.docs[0].data());
+            } else {
+              setMyAttendance(null);
+            }
+            setLoading(false);
+          }, () => {
+            if (!isCancelled) setLoading(false);
+          });
+
+          unsubscribers.push(unsubMyAttendance);
+        } catch {
+          if (!isCancelled) setLoading(false);
+        }
+      };
+
+      loadStudentDashboard();
+
+      return () => {
+        isCancelled = true;
+        unsubscribers.forEach((unsub) => unsub());
+      };
+    }
 
     unsubscribers.push(
       db.collection('students').where('status', '==', 'Aktif').onSnapshot((snap) => {
@@ -87,13 +163,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
         setStats(prev => ({ ...prev, newLetters: snap.size }));
       })
     );
-
-    if (isSiswa) {
-      const attId = `${currentUser.uid}_${todayStr}`;
-      db.collection('attendance').doc(attId).get().then((myAttDoc) => {
-        if (myAttDoc.exists) setMyAttendance(myAttDoc.data());
-      }).catch(() => undefined);
-    }
 
     return () => {
       unsubscribers.forEach((unsub) => unsub());
