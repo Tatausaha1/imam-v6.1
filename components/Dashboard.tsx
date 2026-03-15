@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import firebase from 'firebase/compat/app';
 import { ViewState, UserRole } from '../types';
 import { db, auth, isMockMode } from '../services/firebase';
 import { 
@@ -29,6 +30,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
   const [myAttendance, setMyAttendance] = useState<any>(null);
 
   const isSiswa = userRole === UserRole.SISWA;
+  const isGuru = userRole === UserRole.GURU || userRole === UserRole.WALI_KELAS;
 
   useEffect(() => {
     setLoading(true);
@@ -130,6 +132,81 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
       };
     }
 
+    if (isGuru) {
+      let isCancelled = false;
+
+      const loadGuruDashboard = async () => {
+        try {
+          let targetClass = '';
+          const userDoc = await db.collection('users').doc(currentUser.uid).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data() || {};
+            targetClass = String(
+              userData.class || userData.className || userData.tingkatRombel || userData.waliClass || ''
+            ).trim();
+            if (userData.displayName && !isCancelled) {
+              setUserName(userData.displayName);
+            }
+          }
+
+          if (!isCancelled) {
+            setStats(prev => ({ ...prev, teachers: 1 }));
+          }
+
+          let studentQuery: firebase.firestore.Query = db.collection('students').where('status', '==', 'Aktif');
+          if (targetClass) {
+            studentQuery = studentQuery.where('tingkatRombel', '==', targetClass);
+          }
+
+          unsubscribers.push(
+            studentQuery.onSnapshot((snap) => {
+              if (isCancelled) return;
+              setStats(prev => ({ ...prev, students: snap.size }));
+            })
+          );
+
+          let attendanceQuery: firebase.firestore.Query = db.collection('attendance').where('date', '==', todayStr);
+          if (targetClass) {
+            attendanceQuery = attendanceQuery.where('class', '==', targetClass);
+          }
+
+          unsubscribers.push(
+            attendanceQuery.onSnapshot((snap) => {
+              if (isCancelled) return;
+              const presentCount = snap.docs.filter((d) => {
+                const data = d.data();
+                return data.status === 'Hadir' || data.status === 'Haid';
+              }).length;
+
+              setStats((prev) => {
+                const percent = prev.students > 0 ? Math.round((presentCount / prev.students) * 100) : 0;
+                return { ...prev, attendanceToday: percent };
+              });
+              setLoading(false);
+            }, () => {
+              if (!isCancelled) setLoading(false);
+            })
+          );
+
+          unsubscribers.push(
+            db.collection('assignments').where('teacherId', '==', currentUser.uid).onSnapshot((snap) => {
+              if (isCancelled) return;
+              setStats(prev => ({ ...prev, newLetters: snap.size }));
+            })
+          );
+        } catch {
+          if (!isCancelled) setLoading(false);
+        }
+      };
+
+      loadGuruDashboard();
+
+      return () => {
+        isCancelled = true;
+        unsubscribers.forEach((unsub) => unsub());
+      };
+    }
+
     unsubscribers.push(
       db.collection('students').where('status', '==', 'Aktif').onSnapshot((snap) => {
         setStats(prev => ({ ...prev, students: snap.size }));
@@ -167,7 +244,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
     return () => {
       unsubscribers.forEach((unsub) => unsub());
     };
-  }, [userRole, isSiswa]);
+  }, [userRole, isSiswa, isGuru]);
 
   return (
     <div className="flex flex-col h-full bg-[#f8fafc] dark:bg-[#020617] overflow-hidden pt-[env(safe-area-inset-top)]">
@@ -177,7 +254,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
         <div className="flex justify-between items-center max-w-md md:max-w-4xl mx-auto w-full">
           <div className="animate-in slide-in-from-left-4 duration-500">
             <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.3em] mb-1.5">
-                {isSiswa ? 'Siswa Portal' : 'Admin Dashboard'}
+                {isSiswa ? 'Siswa Portal' : isGuru ? 'Guru Dashboard' : 'Admin Dashboard'}
             </p>
             <h1 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
                 Halo, {userName.split(' ')[0]}!
@@ -223,9 +300,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
                 ) : (
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                         <StatCard icon={UsersGroupIcon} label="Siswa Aktif" val={loading ? "..." : stats.students} color="text-indigo-600" bg="bg-indigo-50" />
-                        <StatCard icon={AcademicCapIcon} label="Total Guru" val={loading ? "..." : stats.teachers} color="text-emerald-600" bg="bg-emerald-50" />
+                        <StatCard icon={AcademicCapIcon} label={isGuru ? 'Akun Guru' : 'Total Guru'} val={loading ? "..." : stats.teachers} color="text-emerald-600" bg="bg-emerald-50" />
                         <StatCard icon={CheckCircleIcon} label="Kehadiran" val={loading ? "..." : `${stats.attendanceToday}%`} color="text-rose-600" bg="bg-rose-50" />
-                        <StatCard icon={EnvelopeIcon} label="Surat Baru" val={loading ? "..." : stats.newLetters} color="text-amber-600" bg="bg-amber-50" />
+                        <StatCard icon={EnvelopeIcon} label={isGuru ? 'Tugas Aktif' : 'Surat Baru'} val={loading ? "..." : stats.newLetters} color="text-amber-600" bg="bg-amber-50" />
                     </div>
                 )}
             </section>
