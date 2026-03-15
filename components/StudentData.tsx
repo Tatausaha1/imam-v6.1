@@ -5,9 +5,11 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
 import { deleteStudent, updateStudent, addStudent, moveStudentToCollection, bulkImportStudents, getStudentsPaginated } from '../services/studentService';
 import { Student, UserRole } from '../types';
-import { db, isMockMode } from '../services/firebase';
+import { app, auth, db, isMockMode } from '../services/firebase';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import Layout from './Layout';
@@ -15,7 +17,7 @@ import {
   UsersGroupIcon, PencilIcon, TrashIcon, Search, PlusIcon,
   Loader2, XCircleIcon, SaveIcon, 
   IdentificationIcon, ChevronDownIcon,
-  PhoneIcon, ArrowRightIcon, FileSpreadsheet, ArrowDownTrayIcon, ArrowPathIcon
+  PhoneIcon, ArrowRightIcon, FileSpreadsheet, ArrowDownTrayIcon, ArrowPathIcon, KeyIcon
 } from './Icons';
 
 const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onBack, userRole }) => {
@@ -44,6 +46,7 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
   };
 
   const [formData, setFormData] = useState<Partial<Student>>(initialFormState);
+  const [provisioningId, setProvisioningId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isMockMode) {
@@ -119,6 +122,84 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
       } catch (e: any) { toast.error("Gagal menyimpan."); } finally { setSaving(false); }
   };
 
+  const handleCreateStudentLogin = async (student: Student) => {
+    if (isMockMode) {
+      toast.success(`Mode simulasi: login siswa ${student.nisn} / 123456`);
+      return;
+    }
+
+    if (!student.id || !student.nisn) {
+      toast.error('NISN siswa belum tersedia.');
+      return;
+    }
+
+    if (student.isClaimed || student.authUid) {
+      toast.info('Akun login siswa sudah aktif.');
+      return;
+    }
+
+    if (!db || !auth) {
+      toast.error('Layanan autentikasi tidak tersedia.');
+      return;
+    }
+
+    const loginEmail = `${String(student.nisn).trim()}@siswa.imam.sch.id`;
+    const defaultPassword = '123456';
+    const currentAppOptions = app?.options || firebase.app().options;
+    const secondaryAppName = `student-provision-${Date.now()}`;
+    let secondaryApp: firebase.app.App | null = null;
+
+    setProvisioningId(student.id);
+    try {
+      secondaryApp = firebase.initializeApp(currentAppOptions, secondaryAppName);
+      const secondaryAuth = secondaryApp.auth();
+      const created = await secondaryAuth.createUserWithEmailAndPassword(loginEmail, defaultPassword);
+      const uid = created.user?.uid;
+      if (!uid) throw new Error('UID gagal dibuat.');
+
+      const userDoc = {
+        uid,
+        displayName: student.namaLengkap,
+        email: loginEmail,
+        role: UserRole.SISWA,
+        idUnik: student.idUnik || '',
+        status: 'Active',
+        createdAt: new Date().toISOString(),
+        isSso: false,
+        studentId: student.id
+      };
+
+      const batch = db.batch();
+      batch.set(db.collection('users').doc(uid), userDoc, { merge: true });
+      batch.update(db.collection('students').doc(student.id), {
+        email: loginEmail,
+        isClaimed: true,
+        authUid: uid,
+        linkedUserId: uid,
+        accountStatus: 'Active',
+        lastModified: new Date().toISOString()
+      });
+      await batch.commit();
+
+      setStudents(prev => prev.map(s => s.id === student.id ? { ...s, email: loginEmail, isClaimed: true, authUid: uid, linkedUserId: uid } : s));
+      toast.success(`Akun siswa aktif. Login: ${student.nisn} / 123456`);
+    } catch (error: any) {
+      if (error?.code === 'auth/email-already-in-use') {
+        toast.error('Akun login sudah ada. Cek data users/siswa.');
+      } else {
+        toast.error(`Gagal aktivasi akun: ${error?.message || 'Unknown error'}`);
+      }
+    } finally {
+      try {
+        if (secondaryApp) {
+          await secondaryApp.auth().signOut();
+          await secondaryApp.delete();
+        }
+      } catch (_) {}
+      setProvisioningId(null);
+    }
+  };
+
   const canManage = userRole === UserRole.ADMIN || userRole === UserRole.DEVELOPER;
 
   return (
@@ -170,12 +251,12 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
                             <th className="w-32 px-2 py-4 text-center">Kelas</th>
                             <th className="w-28 px-2 py-4 text-center">Gender</th>
                             <th className="w-24 px-2 py-4 text-center">Status</th>
-                            {canManage && <th className="w-20 px-2 py-4 text-center">Aksi</th>}
+                            {canManage && <th className="w-28 px-2 py-4 text-center">Aksi</th>}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                         {loading ? (
-                            <tr><td colSpan={7} className="py-20 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-indigo-500 opacity-20" /></td></tr>
+                            <tr><td colSpan={canManage ? 7 : 6} className="py-20 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-indigo-500 opacity-20" /></td></tr>
                         ) : processedStudents.map((s, idx) => (
                             <tr key={s.id || s.idUnik} className="text-[10px] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                 <td className="px-2 py-3.5 text-center text-slate-400 font-bold">{idx + 1}</td>
@@ -188,7 +269,17 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
                                 </td>
                                 {canManage && (
                                     <td className="px-2 py-3.5 text-center">
-                                        <button onClick={() => { setEditingId(s.id!); setFormData({...s}); setIsModalOpen(true); }} className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><PencilIcon className="w-3.5 h-3.5" /></button>
+                                        <div className="flex items-center justify-center gap-1.5">
+                                          <button onClick={() => { setEditingId(s.id!); setFormData({...s}); setIsModalOpen(true); }} className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg" title="Edit data siswa"><PencilIcon className="w-3.5 h-3.5" /></button>
+                                          <button
+                                            onClick={() => handleCreateStudentLogin(s)}
+                                            disabled={provisioningId === s.id || !!s.isClaimed || !!s.authUid}
+                                            className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg disabled:opacity-40"
+                                            title={s.isClaimed || s.authUid ? 'Akun sudah aktif' : 'Aktifkan akun login siswa (NISN / 123456)'}
+                                          >
+                                            {provisioningId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyIcon className="w-3.5 h-3.5" />}
+                                          </button>
+                                        </div>
                                     </td>
                                 )}
                             </tr>

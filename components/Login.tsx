@@ -22,7 +22,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     setError('');
 
-    const u = email.trim();
+    const rawLogin = email.trim();
+    const u = /^\d{6,20}$/.test(rawLogin) ? `${rawLogin}@siswa.imam.sch.id` : rawLogin;
     const p = password.trim();
 
     if (isMockMode) {
@@ -122,15 +123,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <form onSubmit={handleLogin} className="space-y-5">
                 <div className="space-y-4">
                     <div className="group">
-                        <label className="block text-[9px] font-black text-white lg:text-slate-400 uppercase tracking-widest mb-2 ml-1 drop-shadow-md">Email / Akun</label>
+                        <label className="block text-[9px] font-black text-white lg:text-slate-400 uppercase tracking-widest mb-2 ml-1 drop-shadow-md">NISN / Email</label>
                         <div className="relative">
                             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 lg:text-slate-400 group-focus-within:text-white lg:group-focus-within:text-indigo-600 transition-colors">
                                 <EnvelopeIcon className="w-5 h-5" />
                             </div>
                             <input 
-                                type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                                type="text" value={email} onChange={(e) => setEmail(e.target.value)}
                                 className="w-full bg-white/10 backdrop-blur-md lg:bg-white lg:dark:bg-slate-900 border border-white/20 lg:border-slate-200 lg:dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-white lg:text-slate-900 lg:dark:text-white placeholder-white/50 focus:outline-none focus:ring-4 focus:ring-white/20 lg:focus:ring-indigo-500/10 focus:border-white lg:focus:border-indigo-500 transition-all font-bold text-sm shadow-xl"
-                                placeholder="Email Anda" required
+                                placeholder="Masukkan NISN atau email" required
                             />
                         </div>
                     </div>
