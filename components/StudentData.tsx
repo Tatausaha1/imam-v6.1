@@ -34,7 +34,7 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
   // State Filter
   const [globalSearch, setGlobalSearch] = useState('');
   const [filterLevel, setFilterLevel] = useState('All');
-  const [filterKelas, setFilterKelas] = useState('All'); 
+  const [filterKelas, setFilterKelas] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
 
   const initialFormState: Partial<Student> = {
@@ -49,7 +49,7 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
     if (isMockMode) {
         setClassList(['10 A', '11 A', '12 A']);
         // Fix: Added missing required properties nisn and jenisKelamin to mock student object
-        setStudents([{ id: '1', namaLengkap: 'ADELIA SRI', idUnik: '25002', nisn: '0081234567', tingkatRombel: '12 A', status: 'Aktif', jenisKelamin: 'Perempuan', isClaimed: false }]);
+        setStudents([{ id: '1', namaLengkap: 'ADELIA SRI', idUnik: '25002', nisn: '0081234567', tingkatRombel: '10 A', status: 'Aktif', jenisKelamin: 'Perempuan', isClaimed: false }]);
         setLoading(false);
         return;
     }
@@ -98,7 +98,14 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
         const matchesStatus = filterStatus === 'All' || s.status === filterStatus;
         return matchesGlobal && matchesLevel && matchesKelas && matchesStatus;
     });
-  }, [students, globalSearch, filterLevel, filterKelas, filterStatus]);
+  }, [students, globalSearch, filterLevel, filterStatus, filterKelas]);
+
+
+  const availableClassFilters = useMemo(() => {
+    const fromMaster = classList.filter(Boolean);
+    const fromStudents = Array.from(new Set(students.map(s => s.tingkatRombel).filter(Boolean) as string[]));
+    return Array.from(new Set([...fromMaster, ...fromStudents])).sort();
+  }, [classList, students]);
 
   const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -115,7 +122,7 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
   const canManage = userRole === UserRole.ADMIN || userRole === UserRole.DEVELOPER;
 
   return (
-    <Layout title="Data Induk Siswa" subtitle="Database Terintegrasi" icon={UsersGroupIcon} onBack={onBack}>
+    <Layout title="Data Induk Siswa" subtitle={filterKelas === 'All' ? 'Filter Semua Kelas' : `Filter Kelas ${filterKelas}`} icon={UsersGroupIcon} onBack={onBack}>
       <div className="p-4 lg:p-6 pb-40 space-y-6">
         
         <div className="bg-white dark:bg-[#0B1121] p-3 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-xl flex flex-col lg:flex-row items-center gap-4">
@@ -131,11 +138,25 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+                <select
+                    value={filterKelas}
+                    onChange={e => setFilterKelas(e.target.value)}
+                    className="px-3 py-3 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-200 rounded-2xl text-[10px] font-black uppercase border border-slate-200 dark:border-slate-700 outline-none"
+                >
+                    <option value="All">Semua Kelas</option>
+                    {availableClassFilters.map((kelas) => (
+                      <option key={kelas} value={kelas}>{kelas}</option>
+                    ))}
+                </select>
                 {canManage && (
                     <button onClick={() => { setEditingId(null); setFormData(initialFormState); setIsModalOpen(true); }} className="px-5 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 shadow-lg"><PlusIcon className="w-4 h-4" /> Tambah</button>
                 )}
                 <button onClick={() => loadStudents(true)} className="p-3 bg-slate-50 dark:bg-slate-900 text-slate-500 rounded-2xl"><ArrowPathIcon className="w-4 h-4" /></button>
             </div>
+        </div>
+
+        <div className="flex items-center">
+            <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-wider">Filter Aktif: {filterKelas === 'All' ? 'Semua Kelas' : `Kelas ${filterKelas}`}</span>
         </div>
 
         <div className="bg-white dark:bg-[#151E32] rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">

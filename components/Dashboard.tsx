@@ -24,49 +24,80 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleTheme, isDarkTheme }) => {
   const [userName, setUserName] = useState<string>('Pengguna');
-  const [stats, setStats] = useState({ students: 0, teachers: 0, attendanceToday: 0 });
+  const [stats, setStats] = useState({ students: 0, teachers: 0, attendanceToday: 0, newLetters: 0 });
   const [loading, setLoading] = useState(true);
   const [myAttendance, setMyAttendance] = useState<any>(null);
 
   const isSiswa = userRole === UserRole.SISWA;
 
   useEffect(() => {
-    const fetchData = async () => {
-        setLoading(true);
-        if (isMockMode) {
-            setTimeout(() => {
-                setStats({ students: 842, teachers: 56, attendanceToday: 92 });
-                setMyAttendance({ status: 'Hadir', checkIn: '07:15' });
-                setLoading(false);
-            }, 500);
-            return;
-        }
+    setLoading(true);
+    const currentUser = auth.currentUser;
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-        if (auth.currentUser && db) {
-            setUserName(auth.currentUser.displayName || 'Pengguna');
-            try {
-                const todayStr = format(new Date(), 'yyyy-MM-dd');
-                const summaryDoc = await db.collection('stats').doc('summary').get();
-                
-                if (summaryDoc.exists) {
-                    const sData = summaryDoc.data();
-                    setStats({
-                        students: sData?.totalStudents || 0,
-                        teachers: sData?.totalTeachers || 0,
-                        attendanceToday: sData?.dailyStats?.[todayStr]?.attendancePercent || 0
-                    });
-                }
-
-                if (isSiswa) {
-                    const attId = `${auth.currentUser.uid}_${todayStr}`;
-                    const myAttDoc = await db.collection('attendance').doc(attId).get();
-                    if (myAttDoc.exists) setMyAttendance(myAttDoc.data());
-                }
-            } catch (e) {}
-        }
+    if (isMockMode) {
+      const timer = setTimeout(() => {
+        setStats({ students: 842, teachers: 56, attendanceToday: 92, newLetters: 12 });
+        setMyAttendance({ status: 'Hadir', checkIn: '07:15' });
         setLoading(false);
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }
+
+    if (!currentUser || !db) {
+      setLoading(false);
+      return;
+    }
+
+    setUserName(currentUser.displayName || 'Pengguna');
+
+    const unsubscribers: Array<() => void> = [];
+
+    unsubscribers.push(
+      db.collection('students').where('status', '==', 'Aktif').onSnapshot((snap) => {
+        setStats(prev => ({ ...prev, students: snap.size }));
+      })
+    );
+
+    unsubscribers.push(
+      db.collection('teachers').onSnapshot((snap) => {
+        setStats(prev => ({ ...prev, teachers: snap.size }));
+      })
+    );
+
+    unsubscribers.push(
+      db.collection('attendance').where('date', '==', todayStr).onSnapshot((snap) => {
+        const presentCount = snap.docs.filter((d) => {
+          const data = d.data();
+          return data.status === 'Hadir' || data.status === 'Haid';
+        }).length;
+
+        setStats((prev) => {
+          const percent = prev.students > 0 ? Math.round((presentCount / prev.students) * 100) : 0;
+          return { ...prev, attendanceToday: percent };
+        });
+
+        setLoading(false);
+      }, () => setLoading(false))
+    );
+
+    unsubscribers.push(
+      db.collection('letters').where('status', '==', 'Pending').onSnapshot((snap) => {
+        setStats(prev => ({ ...prev, newLetters: snap.size }));
+      })
+    );
+
+    if (isSiswa) {
+      const attId = `${currentUser.uid}_${todayStr}`;
+      db.collection('attendance').doc(attId).get().then((myAttDoc) => {
+        if (myAttDoc.exists) setMyAttendance(myAttDoc.data());
+      }).catch(() => undefined);
+    }
+
+    return () => {
+      unsubscribers.forEach((unsub) => unsub());
     };
-    fetchData();
   }, [userRole, isSiswa]);
 
   return (
@@ -122,10 +153,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                        <StatCard icon={UsersGroupIcon} label="Siswa Aktif" val={stats.students} color="text-indigo-600" bg="bg-indigo-50" />
-                        <StatCard icon={AcademicCapIcon} label="Total Guru" val={stats.teachers} color="text-emerald-600" bg="bg-emerald-50" />
-                        <StatCard icon={CheckCircleIcon} label="Kehadiran" val={`${stats.attendanceToday}%`} color="text-rose-600" bg="bg-rose-50" />
-                        <StatCard icon={EnvelopeIcon} label="Surat Baru" val="12" color="text-amber-600" bg="bg-amber-50" />
+                        <StatCard icon={UsersGroupIcon} label="Siswa Aktif" val={loading ? "..." : stats.students} color="text-indigo-600" bg="bg-indigo-50" />
+                        <StatCard icon={AcademicCapIcon} label="Total Guru" val={loading ? "..." : stats.teachers} color="text-emerald-600" bg="bg-emerald-50" />
+                        <StatCard icon={CheckCircleIcon} label="Kehadiran" val={loading ? "..." : `${stats.attendanceToday}%`} color="text-rose-600" bg="bg-rose-50" />
+                        <StatCard icon={EnvelopeIcon} label="Surat Baru" val={loading ? "..." : stats.newLetters} color="text-amber-600" bg="bg-amber-50" />
                     </div>
                 )}
             </section>

@@ -18,6 +18,7 @@ interface AssignmentsProps {
 }
 
 const Assignments: React.FC<AssignmentsProps> = ({ onBack, userRole }) => {
+  const monitoredClass = '10 A';
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -58,8 +59,8 @@ const Assignments: React.FC<AssignmentsProps> = ({ onBack, userRole }) => {
                 const all = await getAssignments();
                 data = all.filter(a => a.teacherId === (user?.uid || 'mock-teacher-1'));
             } else if (isSuperUser) {
-                // SuperUser: Monitoring Global (Semua Tugas)
-                data = await getAssignments();
+                // SuperUser: Monitoring fokus kelas 10 A
+                data = await getAssignments(monitoredClass);
             }
             setAssignments(data);
         } catch (error) {
@@ -82,7 +83,7 @@ const Assignments: React.FC<AssignmentsProps> = ({ onBack, userRole }) => {
   const getPageConfig = () => {
     if (isSiswa) return { title: `Tugas Kelas ${userContext.class}`, icon: AcademicCapIcon, label: 'Tugas Saya' };
     if (isGuru) return { title: "Manajemen Tugas", icon: BriefcaseIcon, label: 'Koleksi Saya' };
-    if (isSuperUser) return { title: "Monitoring Akademik", icon: ShieldCheckIcon, label: 'Semua Rombel' };
+    if (isSuperUser) return { title: `Monitoring Akademik - ${monitoredClass}`, icon: ShieldCheckIcon, label: `Rombel ${monitoredClass}` };
     return { title: "Daftar Tugas", icon: AcademicCapIcon, label: 'Tugas' };
   };
 
@@ -116,7 +117,7 @@ const Assignments: React.FC<AssignmentsProps> = ({ onBack, userRole }) => {
                       <p className="text-[8px] font-black uppercase tracking-[0.2em] opacity-70">Supervisi Global</p>
                       <h3 className="text-xl font-black mt-1">{assignments.length} Tugas Aktif</h3>
                       <div className="flex gap-2 mt-4">
-                          <div className="px-3 py-1 bg-white/20 rounded-lg text-[7px] font-black uppercase border border-white/10">Semua Kelas</div>
+                          <div className="px-3 py-1 bg-white/20 rounded-lg text-[7px] font-black uppercase border border-white/10">Kelas {monitoredClass}</div>
                           <div className="px-3 py-1 bg-white/20 rounded-lg text-[7px] font-black uppercase border border-white/10">Pantauan Realtime</div>
                       </div>
                   </div>
