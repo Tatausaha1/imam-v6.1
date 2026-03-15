@@ -14,6 +14,20 @@ import {
 } from './Icons';
 import { format } from 'date-fns';
 
+const DASHBOARD_CACHE_TTL_MS = 60 * 1000;
+
+let dashboardDataCache: {
+  key: string;
+  fetchedAt: number;
+  payload: {
+    stats: { students: number; teachers: number; classes: number; pendingLetters: number; attendanceToday: number; };
+    maleStudents: number;
+    femaleStudents: number;
+    classAttendancePct: number;
+    managedClass: ClassData | null;
+  };
+} | null = null;
+
 interface DashboardProps {
   onNavigate: (view: ViewState) => void;
   userRole: UserRole;
@@ -77,6 +91,141 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
           return { ...prev, attendanceToday: percent };
         });
 
+    if (!auth?.currentUser && !isMockMode) return;
+
+    if (isMockMode) {
+        setHasNewNotifications(true);
+    } else if (db) {
+        db.collection('announcements').limit(1).get()
+            .then(snap => {
+                if (!snap.empty) setHasNewNotifications(true);
+            })
+            .catch(() => {});
+    }
+
+    const fetchAllData = async () => {
+        setLoadingStats(true);
+        const uid = auth?.currentUser?.uid;
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const cacheKey = `${uid || 'guest'}:${userRole}:${todayStr}`;
+
+    const fetchData = async () => {
+        setLoading(true);
+        if (isMockMode) {
+            setTimeout(() => {
+                setStats({ students: 842, teachers: 56, attendanceToday: 92 });
+                setMyAttendance({ status: 'Hadir', checkIn: '07:15' });
+                setLoading(false);
+            }, 500);
+            return;
+        }
+
+        if (!db || !uid) return;
+
+        const now = Date.now();
+        if (dashboardDataCache && dashboardDataCache.key === cacheKey && (now - dashboardDataCache.fetchedAt) < DASHBOARD_CACHE_TTL_MS) {
+            setStats(dashboardDataCache.payload.stats);
+            setMaleStudents(dashboardDataCache.payload.maleStudents);
+            setFemaleStudents(dashboardDataCache.payload.femaleStudents);
+            setManagedClass(dashboardDataCache.payload.managedClass);
+            setClassAttendancePct(dashboardDataCache.payload.classAttendancePct);
+            setLoadingStats(false);
+            return;
+        }
+
+        try {
+            const [studentsSnap, teachersSnap, classesSnap] = await Promise.all([
+                db.collection('students').where('status', '==', 'Aktif').get(),
+                db.collection('teachers').get(),
+                db.collection('classes').get()
+            ]);
+
+            const sDocs = studentsSnap.docs.map(d => d.data() as Student);
+            let attendanceTodaySnap;
+            let lettersSnap;
+
+            if (isStaffAction || isKamad) {
+                [attendanceTodaySnap, lettersSnap] = await Promise.all([
+                    db.collection('attendance').where('date', '==', todayStr).get(),
+                    db.collection('letters').where('status', '==', 'Pending').get()
+                ]);
+            } else {
+                [attendanceTodaySnap, lettersSnap] = await Promise.all([
+                    db.collection('attendance').where('date', '==', todayStr).where('studentId', '==', uid).get(),
+                    db.collection('letters').where('userId', '==', uid).where('status', '==', 'Pending').get()
+                ]);
+            }
+
+            const nextStats = {
+                students: studentsSnap.size,
+                teachers: teachersSnap.size,
+                classes: classesSnap.size,
+                pendingLetters: lettersSnap.size,
+                attendanceToday: (isStaffAction || isKamad) ? attendanceTodaySnap.size : 0
+            };
+
+            let nextManagedClass: ClassData | null = null;
+            let nextMaleStudents = sDocs.filter(d => d.jenisKelamin === 'Laki-laki').length;
+            let nextFemaleStudents = sDocs.filter(d => d.jenisKelamin === 'Perempuan').length;
+            let nextClassAttendancePct = 0;
+
+            if (isWaliKelas) {
+                const myClassDoc = classesSnap.docs.find(d => d.data().teacherId === uid);
+                if (myClassDoc) {
+                    nextManagedClass = { id: myClassDoc.id, ...myClassDoc.data() } as ClassData;
+                    const classStudents = sDocs.filter(s => s.tingkatRombel === nextManagedClass?.name);
+                    const classAttendanceCount = attendanceTodaySnap.docs.filter(d => d.data().class === nextManagedClass?.name).length;
+                    nextMaleStudents = classStudents.filter(s => s.jenisKelamin === 'Laki-laki').length;
+                    nextFemaleStudents = classStudents.filter(s => s.jenisKelamin === 'Perempuan').length;
+                    if (classStudents.length > 0) {
+                        nextClassAttendancePct = Math.round((classAttendanceCount / classStudents.length) * 100);
+                    }
+                }
+            }
+
+            setStats(nextStats);
+            setManagedClass(nextManagedClass);
+            setMaleStudents(nextMaleStudents);
+            setFemaleStudents(nextFemaleStudents);
+            setClassAttendancePct(nextClassAttendancePct);
+
+            dashboardDataCache = {
+                key: cacheKey,
+                fetchedAt: now,
+                payload: {
+                    stats: nextStats,
+                    maleStudents: nextMaleStudents,
+                    femaleStudents: nextFemaleStudents,
+                    managedClass: nextManagedClass,
+                    classAttendancePct: nextClassAttendancePct
+                }
+            };
+        } catch (e: any) { 
+            console.error("Dashboard Error:", e.message); 
+        } finally { 
+            setLoadingStats(false); 
+        if (auth.currentUser && db) {
+            setUserName(auth.currentUser.displayName || 'Pengguna');
+            try {
+                const todayStr = format(new Date(), 'yyyy-MM-dd');
+                const summaryDoc = await db.collection('stats').doc('summary').get();
+                
+                if (summaryDoc.exists) {
+                    const sData = summaryDoc.data();
+                    setStats({
+                        students: sData?.totalStudents || 0,
+                        teachers: sData?.totalTeachers || 0,
+                        attendanceToday: sData?.dailyStats?.[todayStr]?.attendancePercent || 0
+                    });
+                }
+
+                if (isSiswa) {
+                    const attId = `${auth.currentUser.uid}_${todayStr}`;
+                    const myAttDoc = await db.collection('attendance').doc(attId).get();
+                    if (myAttDoc.exists) setMyAttendance(myAttDoc.data());
+                }
+            } catch (e) {}
+        }
         setLoading(false);
       }, () => setLoading(false))
     );
@@ -97,6 +246,80 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
     return () => {
       unsubscribers.forEach((unsub) => unsub());
     };
+    fetchAllData();
+  }, [userRole, isWaliKelas, isStaffAction, isKamad]);
+
+  useEffect(() => {
+      const uid = auth?.currentUser?.uid;
+      if (!uid || !db || isMockMode) return;
+
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const attendanceRef = db.collection('attendance');
+      const query = userIdUnik
+        ? attendanceRef.where('date', '==', todayStr).where('idUnik', '==', userIdUnik).limit(1)
+        : attendanceRef.where('date', '==', todayStr).where('studentId', '==', uid).limit(1);
+
+      query
+        .get()
+        .then((snap) => {
+          if (!snap.empty) setTodayAttendance(snap.docs[0].data());
+        })
+        .catch(() => {});
+  }, [userIdUnik]);
+
+  useEffect(() => {
+      if (auth.currentUser) {
+          setUserName(auth.currentUser.displayName || 'Pengguna');
+          if (db) {
+              db.collection('users').doc(auth.currentUser.uid).get().then(doc => {
+                  if (doc.exists) {
+                      const data = doc.data();
+                      setUserIdUnik(data?.idUnik || data?.nisn || null);
+                  }
+              }).catch(() => {});
+          }
+      }
+  }, []);
+
+  const quickMenuItems = [
+    { show: true, label: 'Jadwal', icon: CalendarIcon, view: ViewState.SCHEDULE, color: 'text-orange-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Scan QR', icon: CameraIcon, view: ViewState.SCANNER, color: 'text-emerald-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Tugas', icon: ClipboardDocumentListIcon, view: ViewState.ASSIGNMENTS, color: 'text-violet-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: isWaliKelas || isAdmin || isKamad, label: 'Kelas', icon: BookOpenIcon, view: ViewState.CLASSES, color: 'text-indigo-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Nilai', icon: AcademicCapIcon, view: ViewState.REPORT_CARDS, color: 'text-teal-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Surat', icon: EnvelopeIcon, view: ViewState.LETTERS, color: 'text-sky-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'Database', icon: ChartBarIcon, view: ViewState.REPORTS, color: 'text-slate-600', bg: 'bg-white dark:bg-slate-800' },
+    { show: true, label: 'AI Chat', icon: HeadsetIcon, view: ViewState.ADVISOR, color: 'text-indigo-600', bg: 'bg-white dark:bg-slate-800' }
+  ];
+
+  const MiniSessionTracker = ({ data }: { data: any }) => {
+    const sessions = [
+        { key: 'checkIn', label: 'M' },
+        { key: 'duha', label: 'D' },
+        { key: 'zuhur', label: 'Z' },
+        { key: 'ashar', label: 'A' },
+        { key: 'checkOut', label: 'P' }
+    ];
+    return (
+        <div className="flex gap-1.5 mt-3">
+            {sessions.map(s => {
+                const val = data ? data[s.key] : null;
+                const isHaid = val && String(val).includes('Haid');
+                const isFilled = !!val;
+                return (
+                    <div key={s.key} className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black border transition-all ${
+                        isFilled 
+                        ? (isHaid ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-emerald-50 border-emerald-200 text-emerald-600') 
+                        : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-300'
+                    }`}>
+                        {s.label}
+                    </div>
+                );
+            })}
+        </div>
+    );
+  };
+    fetchData();
   }, [userRole, isSiswa]);
 
   return (

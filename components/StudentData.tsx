@@ -35,6 +35,7 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
   const [globalSearch, setGlobalSearch] = useState('');
   const [filterLevel, setFilterLevel] = useState('All');
   const [filterKelas, setFilterKelas] = useState('All');
+  const [filterKelas, setFilterKelas] = useState('10 A');
   const [filterStatus, setFilterStatus] = useState('All');
 
   const initialFormState: Partial<Student> = {
@@ -123,6 +124,7 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
 
   return (
     <Layout title="Data Induk Siswa" subtitle={filterKelas === 'All' ? 'Filter Semua Kelas' : `Filter Kelas ${filterKelas}`} icon={UsersGroupIcon} onBack={onBack}>
+    <Layout title="Data Induk Siswa" subtitle={`Filter Kelas ${filterKelas}`} icon={UsersGroupIcon} onBack={onBack}>
       <div className="p-4 lg:p-6 pb-40 space-y-6">
         
         <div className="bg-white dark:bg-[#0B1121] p-3 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-xl flex flex-col lg:flex-row items-center gap-4">
@@ -147,6 +149,7 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
                     {availableClassFilters.map((kelas) => (
                       <option key={kelas} value={kelas}>{kelas}</option>
                     ))}
+                    <option value="10 A">Kelas 10 A</option>
                 </select>
                 {canManage && (
                     <button onClick={() => { setEditingId(null); setFormData(initialFormState); setIsModalOpen(true); }} className="px-5 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 shadow-lg"><PlusIcon className="w-4 h-4" /> Tambah</button>
@@ -157,6 +160,7 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
 
         <div className="flex items-center">
             <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-wider">Filter Aktif: {filterKelas === 'All' ? 'Semua Kelas' : `Kelas ${filterKelas}`}</span>
+            <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-wider">Filter Aktif: Kelas {filterKelas}</span>
         </div>
 
         <div className="bg-white dark:bg-[#151E32] rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
