@@ -32,6 +32,28 @@ const toMinute = (time?: string | null) => {
   return h * 60 + m;
 };
 
+const toDateKey = (date: Date) => {
+  const y = date.getFullYear();
+  const m = `${date.getMonth() + 1}`.padStart(2, '0');
+  const d = `${date.getDate()}`.padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const buildEffectiveSchoolDates = (rangeDay: number) => {
+  const dates = new Set<string>();
+  const cursor = new Date();
+  cursor.setHours(12, 0, 0, 0);
+
+  for (let i = 0; i < rangeDay; i += 1) {
+    const day = cursor.getDay();
+    // Asumsi hari efektif: Senin-Sabtu (Minggu libur).
+    if (day !== 0) dates.add(toDateKey(cursor));
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return dates;
+};
+
 const PointsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [students, setStudents] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -91,15 +113,14 @@ const PointsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const summaries = useMemo<PointSummary[]>(() => {
     const startMinutes = toMinute(LATE_LIMIT) || 450;
     const checkoutLimit = toMinute(CHECKOUT_LIMIT) || 960;
+    const effectiveSchoolDates = buildEffectiveSchoolDates(dayRange);
 
     const targetStudents = students.filter((s) => s.tingkatRombel === selectedClass);
     const attendanceByStudent = new Map<string, AttendanceRecord[]>();
-    const trackedDates = new Set<string>();
 
     attendance
       .filter((a) => a.class === selectedClass)
       .forEach((a) => {
-        if (a.date) trackedDates.add(a.date);
         const list = attendanceByStudent.get(a.studentId) || [];
         list.push(a);
         attendanceByStudent.set(a.studentId, list);
@@ -137,9 +158,10 @@ const PointsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         if (r.status === 'Sakit' || r.status === 'Izin') score -= 1;
       });
 
-      // Penalize days where class attendance exists but this student has no record.
-      // In production data, attendance docs are created only when scanned/updated.
-      absenceCount = Math.max(0, trackedDates.size - recordDates.size);
+      // Penalti untuk hari efektif tanpa dokumen presensi.
+      // Dokumen presensi hanya tercipta saat scan/update, sehingga tanpa dokumen
+      // pada hari efektif dianggap Alpha implisit.
+      absenceCount = Math.max(0, effectiveSchoolDates.size - recordDates.size);
       if (absenceCount > 0) {
         score -= absenceCount * 5;
       }
@@ -161,7 +183,7 @@ const PointsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         hadirCount,
       };
     }).sort((a, b) => b.score - a.score);
-  }, [students, attendance, selectedClass]);
+  }, [students, attendance, selectedClass, dayRange]);
 
   const avgScore = summaries.length > 0
     ? Math.round(summaries.reduce((acc, item) => acc + item.score, 0) / summaries.length)
