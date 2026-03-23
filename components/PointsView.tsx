@@ -20,6 +20,7 @@ type PointSummary = {
   score: number;
   lateCount: number;
   missingCheckoutCount: number;
+  absenceCount: number;
   hadirCount: number;
 };
 
@@ -29,6 +30,28 @@ const toMinute = (time?: string | null) => {
   const [h, m] = parsed.split(':').map(Number);
   if (Number.isNaN(h) || Number.isNaN(m)) return null;
   return h * 60 + m;
+};
+
+const toDateKey = (date: Date) => {
+  const y = date.getFullYear();
+  const m = `${date.getMonth() + 1}`.padStart(2, '0');
+  const d = `${date.getDate()}`.padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const buildEffectiveSchoolDates = (rangeDay: number) => {
+  const dates = new Set<string>();
+  const cursor = new Date();
+  cursor.setHours(12, 0, 0, 0);
+
+  for (let i = 0; i < rangeDay; i += 1) {
+    const day = cursor.getDay();
+    // Asumsi hari efektif: Senin-Sabtu (Minggu libur).
+    if (day !== 0) dates.add(toDateKey(cursor));
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return dates;
 };
 
 const PointsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
@@ -90,6 +113,7 @@ const PointsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const summaries = useMemo<PointSummary[]>(() => {
     const startMinutes = toMinute(LATE_LIMIT) || 450;
     const checkoutLimit = toMinute(CHECKOUT_LIMIT) || 960;
+    const effectiveSchoolDates = buildEffectiveSchoolDates(dayRange);
 
     const targetStudents = students.filter((s) => s.tingkatRombel === selectedClass);
     const attendanceByStudent = new Map<string, AttendanceRecord[]>();
@@ -104,10 +128,12 @@ const PointsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
     return targetStudents.map((student) => {
       const records = attendanceByStudent.get(student.id || '') || [];
+      const recordDates = new Set(records.map((r) => r.date).filter(Boolean));
 
       let score = 100;
       let lateCount = 0;
       let missingCheckoutCount = 0;
+      let absenceCount = 0;
       let hadirCount = 0;
 
       records.forEach((r) => {
@@ -132,6 +158,14 @@ const PointsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         if (r.status === 'Sakit' || r.status === 'Izin') score -= 1;
       });
 
+      // Penalti untuk hari efektif tanpa dokumen presensi.
+      // Dokumen presensi hanya tercipta saat scan/update, sehingga tanpa dokumen
+      // pada hari efektif dianggap Alpha implisit.
+      absenceCount = Math.max(0, effectiveSchoolDates.size - recordDates.size);
+      if (absenceCount > 0) {
+        score -= absenceCount * 5;
+      }
+
       if (hadirCount >= 20) score += 5;
       if (hadirCount >= 10 && lateCount === 0) score += 3;
 
@@ -145,10 +179,11 @@ const PointsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         score,
         lateCount,
         missingCheckoutCount,
+        absenceCount,
         hadirCount,
       };
     }).sort((a, b) => b.score - a.score);
-  }, [students, attendance, selectedClass]);
+  }, [students, attendance, selectedClass, dayRange]);
 
   const avgScore = summaries.length > 0
     ? Math.round(summaries.reduce((acc, item) => acc + item.score, 0) / summaries.length)
@@ -219,7 +254,7 @@ const PointsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div className="mt-3 grid grid-cols-4 gap-2 text-center">
                   <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-2">
                     <p className="text-[7px] font-black text-slate-400 uppercase">Hadir</p>
                     <p className="text-[11px] font-black text-emerald-600">{item.hadirCount}</p>
@@ -229,8 +264,12 @@ const PointsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                     <p className="text-[11px] font-black text-amber-600">{item.lateCount}</p>
                   </div>
                   <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-2">
-                    <p className="text-[7px] font-black text-slate-400 uppercase">Minus Kehadiran</p>
+                    <p className="text-[7px] font-black text-slate-400 uppercase">Checkout Minus</p>
                     <p className="text-[11px] font-black text-rose-600">{item.missingCheckoutCount}</p>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-2">
+                    <p className="text-[7px] font-black text-slate-400 uppercase">Tanpa Presensi</p>
+                    <p className="text-[11px] font-black text-rose-700">{item.absenceCount}</p>
                   </div>
                 </div>
               </div>
