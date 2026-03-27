@@ -16,6 +16,11 @@ export default defineConfig(({ mode }) => {
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.OPENAI_API_KEY': JSON.stringify(env.OPENAI_API_KEY)
       },
+      build: {
+        // Bundle utama aplikasi cukup besar karena banyak modul fitur + export libs.
+        // Warning dinaikkan agar build log lebih relevan dan tidak false alarm.
+        chunkSizeWarningLimit: 1200,
+      },
       resolve: {
         alias: {
           '@': path.resolve('.'),

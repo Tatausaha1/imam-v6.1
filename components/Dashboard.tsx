@@ -61,14 +61,33 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
       return () => clearTimeout(timer);
     }
 
-    if (!currentUser || !db) {
-      setLoading(false);
-      return;
-    }
+    const fetchAllData = async () => {
+        setLoadingStats(true);
+        const uid = auth?.currentUser?.uid;
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const cacheKey = `${uid || 'guest'}:${userRole}:${todayStr}`;
 
     setUserName(currentUser.displayName || 'Pengguna');
 
-    const unsubscribers: Array<() => void> = [];
+        if (!db || !uid) return;
+
+        const now = Date.now();
+        if (dashboardDataCache && dashboardDataCache.key === cacheKey && (now - dashboardDataCache.fetchedAt) < DASHBOARD_CACHE_TTL_MS) {
+            setStats(dashboardDataCache.payload.stats);
+            setMaleStudents(dashboardDataCache.payload.maleStudents);
+            setFemaleStudents(dashboardDataCache.payload.femaleStudents);
+            setManagedClass(dashboardDataCache.payload.managedClass);
+            setClassAttendancePct(dashboardDataCache.payload.classAttendancePct);
+            setLoadingStats(false);
+            return;
+        }
+
+        try {
+            const [studentsSnap, teachersSnap, classesSnap] = await Promise.all([
+                db.collection('students').where('status', '==', 'Aktif').get(),
+                db.collection('teachers').get(),
+                db.collection('classes').get()
+            ]);
 
     unsubscribers.push(
       db.collection('students').where('status', '==', 'Aktif').onSnapshot((snap) => {
@@ -76,23 +95,88 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
       })
     );
 
-    unsubscribers.push(
-      db.collection('teachers').onSnapshot((snap) => {
-        setStats(prev => ({ ...prev, teachers: snap.size }));
-      })
-    );
+            if (isStaffAction || isKamad) {
+                [attendanceTodaySnap, lettersSnap] = await Promise.all([
+                    db.collection('attendance').where('date', '==', todayStr).get(),
+                    db.collection('letters').where('status', '==', 'Pending').get()
+                ]);
+            } else {
+                [attendanceTodaySnap, lettersSnap] = await Promise.all([
+                    db.collection('attendance').where('date', '==', todayStr).where('studentId', '==', uid).get(),
+                    db.collection('letters').where('userId', '==', uid).where('status', '==', 'Pending').get()
+                ]);
+            }
 
-    unsubscribers.push(
-      db.collection('attendance').where('date', '==', todayStr).onSnapshot((snap) => {
-        const presentCount = snap.docs.filter((d) => {
-          const data = d.data();
-          return data.status === 'Hadir' || data.status === 'Haid';
-        }).length;
+            const nextStats = {
+                students: studentsSnap.size,
+                teachers: teachersSnap.size,
+                classes: classesSnap.size,
+                pendingLetters: lettersSnap.size,
+                attendanceToday: (isStaffAction || isKamad) ? attendanceTodaySnap.size : 0
+            };
 
-        setStats((prev) => {
-          const percent = prev.students > 0 ? Math.round((presentCount / prev.students) * 100) : 0;
-          return { ...prev, attendanceToday: percent };
-        });
+            let nextManagedClass: ClassData | null = null;
+            let nextMaleStudents = sDocs.filter(d => d.jenisKelamin === 'Laki-laki').length;
+            let nextFemaleStudents = sDocs.filter(d => d.jenisKelamin === 'Perempuan').length;
+            let nextClassAttendancePct = 0;
+
+            if (isWaliKelas) {
+                const myClassDoc = classesSnap.docs.find(d => d.data().teacherId === uid);
+                if (myClassDoc) {
+                    nextManagedClass = { id: myClassDoc.id, ...myClassDoc.data() } as ClassData;
+                    const classStudents = sDocs.filter(s => s.tingkatRombel === nextManagedClass?.name);
+                    const classAttendanceCount = attendanceTodaySnap.docs.filter(d => d.data().class === nextManagedClass?.name).length;
+                    nextMaleStudents = classStudents.filter(s => s.jenisKelamin === 'Laki-laki').length;
+                    nextFemaleStudents = classStudents.filter(s => s.jenisKelamin === 'Perempuan').length;
+                    if (classStudents.length > 0) {
+                        nextClassAttendancePct = Math.round((classAttendanceCount / classStudents.length) * 100);
+                    }
+                }
+            }
+
+            setStats(nextStats);
+            setManagedClass(nextManagedClass);
+            setMaleStudents(nextMaleStudents);
+            setFemaleStudents(nextFemaleStudents);
+            setClassAttendancePct(nextClassAttendancePct);
+
+            dashboardDataCache = {
+                key: cacheKey,
+                fetchedAt: now,
+                payload: {
+                    stats: nextStats,
+                    maleStudents: nextMaleStudents,
+                    femaleStudents: nextFemaleStudents,
+                    managedClass: nextManagedClass,
+                    classAttendancePct: nextClassAttendancePct
+                }
+            };
+        } catch (e: any) { 
+            console.error("Dashboard Error:", e.message); 
+        } finally { 
+            setLoadingStats(false); 
+        }
+    };
+    fetchAllData();
+  }, [userRole, isWaliKelas, isStaffAction, isKamad]);
+
+  useEffect(() => {
+      const uid = auth?.currentUser?.uid;
+      if (!uid || !db || isMockMode) return;
+
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const attendanceRef = db.collection('attendance');
+      const query = userIdUnik
+        ? attendanceRef.where('date', '==', todayStr).where('idUnik', '==', userIdUnik).limit(1)
+        : attendanceRef.where('date', '==', todayStr).where('studentId', '==', uid).limit(1);
+
+      query
+        .get()
+        .then((snap) => {
+          if (!snap.empty) setTodayAttendance(snap.docs[0].data());
+        })
+        .catch(() => {});
+  }, [userIdUnik]);
 
         setLoading(false);
       }, () => setLoading(false))

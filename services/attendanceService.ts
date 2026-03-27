@@ -132,6 +132,11 @@ export const recordAttendanceByScan = async (code: string, session: AttendanceSe
         if (studentData.nisn) studentLookupCache.set(studentData.nisn, studentData);
         if (studentData.id) studentLookupCache.set(studentData.id, studentData);
 
+        studentLookupCache.set(code, studentData);
+        if (studentData.idUnik) studentLookupCache.set(studentData.idUnik, studentData);
+        if (studentData.nisn) studentLookupCache.set(studentData.nisn, studentData);
+        if (studentData.id) studentLookupCache.set(studentData.id, studentData);
+
         // Pastikan kita menggunakan Document ID asli untuk primary key absensi
         const attendanceId = `${studentData.id}_${today}`;
         const attendanceRef = db.collection(COLLECTION_ATTENDANCE).doc(attendanceId);
