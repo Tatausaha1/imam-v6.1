@@ -24,11 +24,6 @@ if ('serviceWorker' in navigator) {
   };
 
   navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (isRefreshing) return;
-    isRefreshing = true;
-    window.location.reload();
-  });
 
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js')
@@ -59,9 +54,6 @@ if ('serviceWorker' in navigator) {
         });
 
         window.addEventListener('online', triggerUpdateCheck);
-        setInterval(() => {
-          reg.update();
-        }, 60 * 60 * 1000);
 
         console.log('IMAM PWA: Service Worker Registered');
       })
