@@ -5,9 +5,11 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
 import { deleteStudent, updateStudent, addStudent, moveStudentToCollection, bulkImportStudents, getStudentsPaginated } from '../services/studentService';
 import { Student, UserRole } from '../types';
-import { db, isMockMode } from '../services/firebase';
+import { app, auth, db, isMockMode } from '../services/firebase';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import Layout from './Layout';
@@ -15,7 +17,7 @@ import {
   UsersGroupIcon, PencilIcon, TrashIcon, Search, PlusIcon,
   Loader2, XCircleIcon, SaveIcon, 
   IdentificationIcon, ChevronDownIcon,
-  PhoneIcon, ArrowRightIcon, FileSpreadsheet, ArrowDownTrayIcon, ArrowPathIcon
+  PhoneIcon, ArrowRightIcon, FileSpreadsheet, ArrowDownTrayIcon, ArrowPathIcon, KeyIcon
 } from './Icons';
 
 const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onBack, userRole }) => {
@@ -44,6 +46,7 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
   };
 
   const [formData, setFormData] = useState<Partial<Student>>(initialFormState);
+  const [provisioningId, setProvisioningId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isMockMode) {
@@ -119,6 +122,84 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
       } catch (e: any) { toast.error("Gagal menyimpan."); } finally { setSaving(false); }
   };
 
+  const handleCreateStudentLogin = async (student: Student) => {
+    if (isMockMode) {
+      toast.success(`Mode simulasi: login siswa ${student.nisn} / 123456`);
+      return;
+    }
+
+    if (!student.id || !student.nisn) {
+      toast.error('NISN siswa belum tersedia.');
+      return;
+    }
+
+    if (student.isClaimed || student.authUid) {
+      toast.info('Akun login siswa sudah aktif.');
+      return;
+    }
+
+    if (!db || !auth) {
+      toast.error('Layanan autentikasi tidak tersedia.');
+      return;
+    }
+
+    const loginEmail = `${String(student.nisn).trim()}@siswa.imam.sch.id`;
+    const defaultPassword = '123456';
+    const currentAppOptions = app?.options || firebase.app().options;
+    const secondaryAppName = `student-provision-${Date.now()}`;
+    let secondaryApp: firebase.app.App | null = null;
+
+    setProvisioningId(student.id);
+    try {
+      secondaryApp = firebase.initializeApp(currentAppOptions, secondaryAppName);
+      const secondaryAuth = secondaryApp.auth();
+      const created = await secondaryAuth.createUserWithEmailAndPassword(loginEmail, defaultPassword);
+      const uid = created.user?.uid;
+      if (!uid) throw new Error('UID gagal dibuat.');
+
+      const userDoc = {
+        uid,
+        displayName: student.namaLengkap,
+        email: loginEmail,
+        role: UserRole.SISWA,
+        idUnik: student.idUnik || '',
+        status: 'Active',
+        createdAt: new Date().toISOString(),
+        isSso: false,
+        studentId: student.id
+      };
+
+      const batch = db.batch();
+      batch.set(db.collection('users').doc(uid), userDoc, { merge: true });
+      batch.update(db.collection('students').doc(student.id), {
+        email: loginEmail,
+        isClaimed: true,
+        authUid: uid,
+        linkedUserId: uid,
+        accountStatus: 'Active',
+        lastModified: new Date().toISOString()
+      });
+      await batch.commit();
+
+      setStudents(prev => prev.map(s => s.id === student.id ? { ...s, email: loginEmail, isClaimed: true, authUid: uid, linkedUserId: uid } : s));
+      toast.success(`Akun siswa aktif. Login: ${student.nisn} / 123456`);
+    } catch (error: any) {
+      if (error?.code === 'auth/email-already-in-use') {
+        toast.error('Akun login sudah ada. Cek data users/siswa.');
+      } else {
+        toast.error(`Gagal aktivasi akun: ${error?.message || 'Unknown error'}`);
+      }
+    } finally {
+      try {
+        if (secondaryApp) {
+          await secondaryApp.auth().signOut();
+          await secondaryApp.delete();
+        }
+      } catch (_) {}
+      setProvisioningId(null);
+    }
+  };
+
   const canManage = userRole === UserRole.ADMIN || userRole === UserRole.DEVELOPER;
 
   return (
@@ -170,12 +251,12 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
                             <th className="w-32 px-2 py-4 text-center">Kelas</th>
                             <th className="w-28 px-2 py-4 text-center">Gender</th>
                             <th className="w-24 px-2 py-4 text-center">Status</th>
-                            {canManage && <th className="w-20 px-2 py-4 text-center">Aksi</th>}
+                            {canManage && <th className="w-28 px-2 py-4 text-center">Aksi</th>}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                         {loading ? (
-                            <tr><td colSpan={7} className="py-20 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-indigo-500 opacity-20" /></td></tr>
+                            <tr><td colSpan={canManage ? 7 : 6} className="py-20 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-indigo-500 opacity-20" /></td></tr>
                         ) : processedStudents.map((s, idx) => (
                             <tr key={s.id || s.idUnik} className="text-[10px] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                 <td className="px-2 py-3.5 text-center text-slate-400 font-bold">{idx + 1}</td>
@@ -188,7 +269,17 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
                                 </td>
                                 {canManage && (
                                     <td className="px-2 py-3.5 text-center">
-                                        <button onClick={() => { setEditingId(s.id!); setFormData({...s}); setIsModalOpen(true); }} className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><PencilIcon className="w-3.5 h-3.5" /></button>
+                                        <div className="flex items-center justify-center gap-1.5">
+                                          <button onClick={() => { setEditingId(s.id!); setFormData({...s}); setIsModalOpen(true); }} className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg" title="Edit data siswa"><PencilIcon className="w-3.5 h-3.5" /></button>
+                                          <button
+                                            onClick={() => handleCreateStudentLogin(s)}
+                                            disabled={provisioningId === s.id || !!s.isClaimed || !!s.authUid}
+                                            className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg disabled:opacity-40"
+                                            title={s.isClaimed || s.authUid ? 'Akun sudah aktif' : 'Aktifkan akun login siswa (NISN / 123456)'}
+                                          >
+                                            {provisioningId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyIcon className="w-3.5 h-3.5" />}
+                                          </button>
+                                        </div>
                                     </td>
                                 )}
                             </tr>
@@ -214,15 +305,75 @@ const StudentData: React.FC<{ onBack: () => void, userRole: UserRole }> = ({ onB
 
       {isModalOpen && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-              <div className="bg-white dark:bg-[#0B1121] w-full max-w-lg rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in duration-300">
-                  <h3 className="text-sm font-black uppercase tracking-widest mb-6">{editingId ? 'Edit Siswa' : 'Tambah Siswa'}</h3>
-                  <form onSubmit={handleSave} className="space-y-4">
-                      <input required type="text" placeholder="ID UNIK" value={formData.idUnik} onChange={e => setFormData({...formData, idUnik: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none" />
-                      <input required type="text" placeholder="NAMA LENGKAP" value={formData.namaLengkap} onChange={e => setFormData({...formData, namaLengkap: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none" />
-                      <div className="flex gap-3">
-                          <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl text-[10px] font-black uppercase">Batal</button>
-                          <button type="submit" disabled={saving} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-lg">
-                              {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : 'Simpan'}
+              <div className="bg-white dark:bg-[#0B1121] w-full max-w-3xl rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in duration-300 border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+                  <h3 className="text-sm font-black uppercase tracking-widest mb-1">{editingId ? 'Edit Data Siswa' : 'Tambah Data Siswa'}</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-6">Pastikan biodata sesuai dokumen resmi siswa.</p>
+
+                  <form onSubmit={handleSave} className="space-y-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">ID Unik</label>
+                              <input required type="text" placeholder="Contoh: 15012" value={formData.idUnik || ''} onChange={e => setFormData({...formData, idUnik: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800" />
+                          </div>
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">NISN</label>
+                              <input required type="text" placeholder="Contoh: 0086806447" value={formData.nisn || ''} onChange={e => setFormData({...formData, nisn: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800" />
+                          </div>
+                      </div>
+
+                      <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nama Lengkap</label>
+                          <input required type="text" placeholder="Nama siswa" value={formData.namaLengkap || ''} onChange={e => setFormData({...formData, namaLengkap: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800" />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Kelas</label>
+                              <select value={formData.tingkatRombel || ''} onChange={e => setFormData({...formData, tingkatRombel: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800">
+                                  <option value="">Pilih Kelas</option>
+                                  {availableClassFilters.map((kelas) => (<option key={kelas} value={kelas}>{kelas}</option>))}
+                              </select>
+                          </div>
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Jenis Kelamin</label>
+                              <select value={formData.jenisKelamin || 'Laki-laki'} onChange={e => setFormData({...formData, jenisKelamin: e.target.value as Student['jenisKelamin']})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800">
+                                  <option value="Laki-laki">Laki-laki</option>
+                                  <option value="Perempuan">Perempuan</option>
+                              </select>
+                          </div>
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Status</label>
+                              <select value={formData.status || 'Aktif'} onChange={e => setFormData({...formData, status: e.target.value as Student['status']})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800">
+                                  <option value="Aktif">Aktif</option>
+                                  <option value="Lulus">Lulus</option>
+                                  <option value="Mutasi">Mutasi</option>
+                                  <option value="Keluar">Keluar</option>
+                                  <option value="Nonaktif">Nonaktif</option>
+                              </select>
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">No. Telepon</label>
+                              <input type="text" placeholder="08xxxxxxxxxx" value={formData.noTelepon || ''} onChange={e => setFormData({...formData, noTelepon: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800" />
+                          </div>
+                          <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Email</label>
+                              <input type="email" placeholder="siswa@email.com" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800" />
+                          </div>
+                      </div>
+
+                      <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Alamat</label>
+                          <textarea rows={3} placeholder="Alamat domisili siswa" value={formData.alamat || ''} onChange={e => setFormData({...formData, alamat: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs font-bold outline-none border border-slate-200 dark:border-slate-800 resize-none" />
+                      </div>
+
+                      <div className="flex gap-3 pt-2">
+                          <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-2xl text-[10px] font-black uppercase">Batal</button>
+                          <button type="submit" disabled={saving} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-lg flex items-center justify-center gap-2">
+                              {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <SaveIcon className="w-4 h-4" />}
+                              Simpan Perubahan
                           </button>
                       </div>
                   </form>

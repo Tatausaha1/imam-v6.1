@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import firebase from 'firebase/compat/app';
 import { ViewState, UserRole } from '../types';
 import { db, auth, isMockMode } from '../services/firebase';
 import { 
@@ -13,6 +14,20 @@ import {
   CameraIcon, HeadsetIcon, SunIcon, MoonIcon
 } from './Icons';
 import { format } from 'date-fns';
+
+const DASHBOARD_CACHE_TTL_MS = 60 * 1000;
+
+let dashboardDataCache: {
+  key: string;
+  fetchedAt: number;
+  payload: {
+    stats: { students: number; teachers: number; classes: number; pendingLetters: number; attendanceToday: number; };
+    maleStudents: number;
+    femaleStudents: number;
+    classAttendancePct: number;
+    managedClass: ClassData | null;
+  };
+} | null = null;
 
 interface DashboardProps {
   onNavigate: (view: ViewState) => void;
@@ -29,6 +44,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
   const [myAttendance, setMyAttendance] = useState<any>(null);
 
   const isSiswa = userRole === UserRole.SISWA;
+  const isGuru = userRole === UserRole.GURU || userRole === UserRole.WALI_KELAS;
 
   useEffect(() => {
     setLoading(true);
@@ -108,7 +124,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
         <div className="flex justify-between items-center max-w-md md:max-w-4xl mx-auto w-full">
           <div className="animate-in slide-in-from-left-4 duration-500">
             <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.3em] mb-1.5">
-                {isSiswa ? 'Siswa Portal' : 'Admin Dashboard'}
+                {isSiswa ? 'Siswa Portal' : isGuru ? 'Guru Dashboard' : 'Admin Dashboard'}
             </p>
             <h1 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
                 Halo, {userName.split(' ')[0]}!

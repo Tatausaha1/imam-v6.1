@@ -46,6 +46,7 @@ interface UserProfile {
   studentId?: string;
   namaAyah?: string;
   namaIbu?: string;
+  teacherId?: string;
 }
 
 interface Notification {
@@ -129,6 +130,8 @@ const Profile: React.FC<ProfileProps> = ({ onBack, onLogout }) => {
                             additionalData.address = s?.alamat || additionalData.address;
                             additionalData.phone = s?.noTelepon || additionalData.phone;
                             additionalData.displayName = s?.namaLengkap || additionalData.displayName;
+                            additionalData.namaAyah = s?.namaAyahKandung || additionalData.namaAyah;
+                            additionalData.namaIbu = s?.namaIbuKandung || additionalData.namaIbu;
                         }
                     } catch (err) {}
                 }
@@ -177,9 +180,20 @@ const Profile: React.FC<ProfileProps> = ({ onBack, onLogout }) => {
       try {
           if (!isMockMode && db && profile) {
               const batch = db.batch();
-              batch.update(db.collection('users').doc(profile.uid), { phone: editForm.phone, address: editForm.address });
+              batch.update(db.collection('users').doc(profile.uid), {
+                phone: editForm.phone,
+                address: editForm.address,
+                namaAyah: editForm.namaAyah,
+                namaIbu: editForm.namaIbu
+              });
               if (profile.studentId) {
-                  batch.update(db.collection('students').doc(profile.studentId), { noTelepon: editForm.phone, alamat: editForm.address });
+                  batch.update(db.collection('students').doc(profile.studentId), {
+                    noTelepon: editForm.phone,
+                    alamat: editForm.address,
+                    namaAyahKandung: editForm.namaAyah,
+                    namaIbuKandung: editForm.namaIbu,
+                    lastModified: new Date().toISOString()
+                  });
               }
               await batch.commit();
               setProfile(prev => prev ? ({ ...prev, ...editForm }) : null);
@@ -260,7 +274,20 @@ const Profile: React.FC<ProfileProps> = ({ onBack, onLogout }) => {
                         <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mt-1">{theme.label} • MAN 1 HST</p>
                     </div>
                     <div className="flex gap-2 mb-3">
-                        <button onClick={() => setIsEditOpen(true)} className="px-5 py-2.5 rounded-xl bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 font-black text-[10px] uppercase tracking-widest border border-slate-100 dark:border-slate-600 shadow-sm">Edit Profil</button>
+                        <button
+                          onClick={() => {
+                            setEditForm({
+                              phone: profile.phone || '',
+                              address: profile.address || '',
+                              namaAyah: profile.namaAyah || '',
+                              namaIbu: profile.namaIbu || ''
+                            });
+                            setIsEditOpen(true);
+                          }}
+                          className="px-5 py-2.5 rounded-xl bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 font-black text-[10px] uppercase tracking-widest border border-slate-100 dark:border-slate-600 shadow-sm"
+                        >
+                          Edit Profil
+                        </button>
                     </div>
                 </div>
             </div>
@@ -276,6 +303,8 @@ const Profile: React.FC<ProfileProps> = ({ onBack, onLogout }) => {
                             <InfoItem icon={IdentificationIcon} label="ID Lokal" value={profile.idUnik} />
                             <InfoItem icon={PhoneIcon} label="WhatsApp" value={profile.phone} />
                             <InfoItem icon={MapPinIcon} label="Alamat" value={profile.address} />
+                            <InfoItem icon={UsersIcon} label="Nama Ayah" value={profile.namaAyah} />
+                            <InfoItem icon={UsersIcon} label="Nama Ibu" value={profile.namaIbu} />
                             <InfoItem icon={EnvelopeIcon} label="Email" value={profile.email} />
                         </div>
                     </div>
@@ -323,6 +352,8 @@ const Profile: React.FC<ProfileProps> = ({ onBack, onLogout }) => {
                         <form onSubmit={handleSaveProfile} className="space-y-5">
                             <div><label className="text-[9px] font-black text-slate-400 uppercase ml-1">No. WhatsApp</label><input type="text" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded-2xl text-xs font-bold outline-none" /></div>
                             <div><label className="text-[9px] font-black text-slate-400 uppercase ml-1">Alamat Domisili</label><textarea rows={3} value={editForm.address} onChange={e => setEditForm({...editForm, address: e.target.value})} className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded-2xl text-xs font-bold outline-none resize-none" /></div>
+                            <div><label className="text-[9px] font-black text-slate-400 uppercase ml-1">Nama Ayah</label><input type="text" value={editForm.namaAyah} onChange={e => setEditForm({...editForm, namaAyah: e.target.value})} className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded-2xl text-xs font-bold outline-none" /></div>
+                            <div><label className="text-[9px] font-black text-slate-400 uppercase ml-1">Nama Ibu</label><input type="text" value={editForm.namaIbu} onChange={e => setEditForm({...editForm, namaIbu: e.target.value})} className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded-2xl text-xs font-bold outline-none" /></div>
                             <div className="flex gap-3 pt-4">
                                 <button type="button" onClick={() => setIsEditOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 font-black rounded-2xl text-[9px] uppercase tracking-widest">Batal</button>
                                 <button type="submit" disabled={saving} className="flex-[2] py-4 bg-indigo-600 text-white font-black rounded-2xl text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg">

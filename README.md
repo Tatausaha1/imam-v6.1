@@ -43,6 +43,15 @@ Tambahkan variabel berikut di **Settings > Environment Variables**:
 | `GEMINI_API_KEY` | `AIzaSy...` (Kunci dari Google AI Studio) |
 | `OPENAI_API_KEY` | `sk-proj-...` (Kunci dari OpenAI - Opsional) |
 
+### 3. Auto Deploy dari GitHub ke Vercel
+Agar update aplikasi langsung ter-deploy otomatis:
+- Hubungkan repository GitHub ke project Vercel.
+- Set branch produksi (umumnya `main`) di **Project Settings > Git**.
+- Set **Auto Deploy** aktif untuk push ke branch produksi.
+- File `vercel.json` di repo ini sudah disiapkan untuk:
+  - fallback SPA ke `index.html` untuk route client-side,
+  - header cache khusus supaya `service-worker.js` tidak tersimpan stale.
+
 ---
 
 ## 🖼️ Menampilkan Logo IMAM di Domain
