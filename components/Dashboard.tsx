@@ -15,6 +15,20 @@ import {
 } from './Icons';
 import { format } from 'date-fns';
 
+const DASHBOARD_CACHE_TTL_MS = 60 * 1000;
+
+let dashboardDataCache: {
+  key: string;
+  fetchedAt: number;
+  payload: {
+    stats: { students: number; teachers: number; classes: number; pendingLetters: number; attendanceToday: number; };
+    maleStudents: number;
+    femaleStudents: number;
+    classAttendancePct: number;
+    managedClass: ClassData | null;
+  };
+} | null = null;
+
 interface DashboardProps {
   onNavigate: (view: ViewState) => void;
   userRole: UserRole;
