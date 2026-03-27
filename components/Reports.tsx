@@ -1,4 +1,3 @@
-
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -6,20 +5,15 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Layout from './Layout';
-import { 
-  ChartBarIcon, Loader2, Search, 
-  CalendarIcon, XCircleIcon,
-  Squares2x2Icon,
-  CheckCircleIcon, ClockIcon, HeartIcon,
-  ArrowDownTrayIcon, BuildingLibraryIcon, UsersIcon,
-  ArrowRightIcon
+import {
+  ChartBarIcon, Loader2, Search,
+  CalendarIcon, ArrowDownTrayIcon, BuildingLibraryIcon, ChevronDownIcon, UsersIcon
 } from './Icons';
 import { db, isMockMode } from '../services/firebase';
 import { endOfMonth, format, parseISO, startOfMonth } from 'date-fns';
 import { id as localeID } from 'date-fns/locale/id';
+import { format } from 'date-fns';
 import { Student, UserRole, ViewState, ClassData } from '../types';
-import { jsPDF } from "jspdf";
-import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 
 interface ReportsProps {
@@ -47,34 +41,17 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
             setSelectedClassFilter(pendingClass);
             localStorage.removeItem('imam_pending_report_class');
         }
-    }, []);
+        setClasses(classesData);
+        if (!selectedClassFilter && classesData.length > 0) setSelectedClassFilter(classesData[0].name);
+      }
+    };
+    loadClasses();
+    return () => { localStorage.removeItem('imam_pending_report_class'); };
+  }, []);
 
-    useEffect(() => {
-        const loadBase = async () => {
-            setLoading(true);
-            if (isMockMode) {
-                setAllStudents([
-                  { id: '1', namaLengkap: 'ADELIA SRI SUNDARI', idUnik: '25002', tingkatRombel: '10 A', status: 'Aktif', jenisKelamin: 'Perempuan' } as any,
-                  { id: '2', namaLengkap: 'AHMAD ZAKI', idUnik: '25003', tingkatRombel: '10 A', status: 'Aktif', jenisKelamin: 'Laki-laki' } as any,
-                  { id: '3', namaLengkap: 'BUDI PRATAMA', idUnik: '25004', tingkatRombel: '11 B', status: 'Aktif', jenisKelamin: 'Laki-laki' } as any,
-                  { id: '4', namaLengkap: 'CINDY CLAUDIA', idUnik: '25005', tingkatRombel: '10 A', status: 'Aktif', jenisKelamin: 'Perempuan' } as any
-                ]);
-                setClasses([{ name: '10 A', teacherName: 'ALFI SYAHRIN S.SOS', level: '10', academicYear: '2024/2025' }]);
-                setLoading(false); return;
-            }
-            if (db) {
-                try {
-                    const [sSnap, cSnap] = await Promise.all([
-                        db.collection('students').where('status', '==', 'Aktif').get(),
-                        db.collection('classes').get()
-                    ]);
-                    setAllStudents(sSnap.docs.map(d => ({ id: d.id, ...d.data() } as Student)));
-                    setClasses(cSnap.docs.map(d => ({ id: d.id, ...d.data() } as ClassData)));
-                } catch (e) { console.error(e); } finally { setLoading(false); }
-            }
-        };
-        loadBase();
-    }, []);
+  useEffect(() => {
+    if (!selectedClassFilter) return;
+    setLoading(true);
 
     useEffect(() => {
         if (!db && !isMockMode) return;
@@ -343,13 +320,19 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
             doc.text("( .................................... )", 25, finalY + 18);
             doc.text(`( ${waliName} )`, 135, finalY + 18);
         }
-    };
 
-    // --- CORE PDF GENERATOR ENGINE ---
-    const generatePDF = (targetData: any[], scopeLabel: string) => {
-        if (targetData.length === 0) {
-            toast.error("Tidak ada data untuk dicetak.");
-            return;
+        const sSnap = await db!.collection('students').where('status', '==', 'Aktif').where('tingkatRombel', '==', selectedClassFilter).get();
+        const mappedStudents = sSnap.docs.map(d => ({ id: d.id, ...d.data() } as Student));
+        setStudents(mappedStudents);
+
+        const studentIds = new Set(sSnap.docs.map(d => d.id));
+        let aSnap: any;
+        if (reportMode === 'harian') {
+          aSnap = await db!.collection('attendance').where('date', '==', selectedDate).get();
+        } else {
+          const monthStart = `${selectedMonth}-01`;
+          const monthEnd = `${selectedMonth}-31`;
+          aSnap = await db!.collection('attendance').where('date', '>=', monthStart).where('date', '<=', monthEnd).get();
         }
 
         const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -426,6 +409,60 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
     }, [classes, allStudents]);
 
 
+    load();
+  }, [selectedDate, selectedMonth, selectedClassFilter, reportMode]);
+
+  const calculateDiff = (timeStr: string | null, limitStr: string, type: 'masuk' | 'pulang') => {
+    if (!timeStr) return null;
+    const cleanTime = timeStr.split(' | ')[0];
+    const [h, m] = cleanTime.split(':').map(Number);
+    const [lh, lm] = limitStr.split(':').map(Number);
+    const diff = (h * 60 + m) - (lh * 60 + lm);
+    if (type === 'masuk' && diff > 0) return <span className="text-[7px] font-black text-amber-500 block">+{diff}m</span>;
+    if (type === 'pulang' && diff < 0) return <span className="text-[7px] font-black text-rose-500 block">{diff}m</span>;
+    return null;
+  };
+
+  const displayData = useMemo(() => {
+    const attMap = new Map<string, any>(attendanceRecords.map(r => [r.studentId, r]));
+    return students
+      .filter(s => {
+        const q = filterNama.toLowerCase().trim();
+        return q === '' || (s.namaLengkap || '').toLowerCase().includes(q) || String(s.idUnik || '').includes(q);
+      })
+      .map(s => ({ ...s, att: attMap.get(s.id!) || { status: 'Alpha' } }));
+  }, [students, attendanceRecords, filterNama]);
+
+  const monthlySummary = useMemo(() => {
+    const filteredStudents = students.filter(s => {
+      const q = filterNama.toLowerCase().trim();
+      return q === '' || (s.namaLengkap || '').toLowerCase().includes(q) || String(s.idUnik || '').includes(q);
+    });
+
+    const grouped = new Map<string, any[]>();
+    attendanceRecords.forEach((r) => {
+      const list = grouped.get(r.studentId) || [];
+      list.push(r);
+      grouped.set(r.studentId, list);
+    });
+
+    return filteredStudents.map((s) => {
+      const rows = grouped.get(s.id || '') || [];
+      const hadir = rows.filter(r => r.status === 'Hadir').length;
+      const haid = rows.filter(r => r.status === 'Haid').length;
+      const izin = rows.filter(r => r.status === 'Izin').length;
+      const sakit = rows.filter(r => r.status === 'Sakit').length;
+      const alpha = rows.filter(r => r.status === 'Alpha').length;
+      const total = rows.length;
+      const presentRate = total > 0 ? Math.round(((hadir + haid) / total) * 100) : 0;
+
+      return { ...s, hadir, haid, izin, sakit, alpha, total, presentRate };
+    });
+  }, [students, attendanceRecords, filterNama]);
+
+  const TimeCell = ({ rawValue, type }: { rawValue: string | null, type: 'masuk' | 'pulang' }) => {
+    const isHaid = String(rawValue || '').includes('| H');
+    const time = rawValue ? rawValue.split(' | ')[0].substring(0, 5) : '--:--';
     return (
         <Layout 
             title="Laporan Presensi" 
@@ -579,64 +616,112 @@ const Reports: React.FC<ReportsProps> = ({ onBack, onNavigate, userRole }) => {
                 </div>
             </div>
 
-            {/* --- MODAL PILIHAN EKSPOR PDF --- */}
-            {showExportModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-[#0B1121] w-full max-w-sm rounded-[2.5rem] p-6 shadow-2xl border border-white/10 overflow-hidden relative">
-                        <div className="flex justify-between items-center mb-6">
-                            <div>
-                                <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">Opsi Unduh Laporan</h3>
-                                <p className="text-[9px] font-bold text-indigo-500 uppercase mt-1 tracking-widest">Format PDF (A4 Satu Lembar Per Kelas)</p>
-                            </div>
-                            <button onClick={() => setShowExportModal(false)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400">
-                                <XCircleIcon className="w-6 h-6" />
-                            </button>
-                        </div>
+            <div className="relative">
+              <BuildingLibraryIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <select value={selectedClassFilter} onChange={e => setSelectedClassFilter(e.target.value)} className="w-full pl-11 py-3.5 bg-slate-50 dark:bg-slate-900 border-none rounded-2xl text-[11px] font-black outline-none appearance-none cursor-pointer">
+                {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+              </select>
+              <ChevronDownIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
+          </div>
 
-                        <div className="space-y-3">
-                            {/* Pilihan 1: Kelas yang dipilih */}
-                            <button 
-                                onClick={() => generatePDF(displayData, selectedClassFilter === 'All' ? 'Seluruh Madrasah' : `KELAS ${selectedClassFilter}`)}
-                                className="w-full flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl group hover:border-indigo-500 transition-all active:scale-95"
-                            >
-                                <div className="flex items-center gap-4 text-left">
-                                    <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600">
-                                        <UsersIcon className="w-5 h-5" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-[10px] font-black text-slate-800 dark:text-white uppercase leading-none">Kelas Saat Ini</p>
-                                        <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">Unit: {selectedClassFilter}</p>
-                                    </div>
-                                </div>
-                                <ArrowRightIcon className="w-4 h-4 text-slate-200 group-hover:text-indigo-500 transition-colors" />
-                            </button>
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+            <input type="text" placeholder="CARI NAMA SISWA..." value={filterNama} onChange={e => setFilterNama(e.target.value)} className="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-900 border-none rounded-2xl text-[10px] font-bold outline-none shadow-inner" />
+          </div>
+        </div>
 
-                            {/* Pilihan 2: Seluruh Rombel (Hasil Tetap Per Kelas) */}
-                            <button 
-                                onClick={handleExportAllRombel}
-                                className="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-indigo-100 dark:border-indigo-900 rounded-2xl group hover:bg-indigo-600 transition-all active:scale-95 shadow-sm"
-                            >
-                                <div className="flex items-center gap-4 text-left">
-                                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center group-hover:bg-white group-hover:text-indigo-600 transition-colors">
-                                        <BuildingLibraryIcon className="w-5 h-5" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 group-hover:text-white uppercase leading-none">Monitoring Madrasah</p>
-                                        <p className="text-[8px] font-bold text-indigo-500/60 group-hover:text-indigo-100 uppercase mt-1">Cetak Semua (Per Rombel)</p>
-                                    </div>
-                                </div>
-                                <ArrowRightIcon className="w-4 h-4 text-indigo-200 group-hover:text-white transition-colors" />
-                            </button>
+        <div className="bg-white dark:bg-[#0B1121] rounded-[2.5rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-xl">
+          <div className="overflow-x-auto custom-scrollbar">
+            {reportMode === 'harian' ? (
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-50 dark:bg-slate-900/50 border-b">
+                  <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    <th className="px-6 py-5 w-12 text-center">#</th>
+                    <th className="px-4 py-5 min-w-[160px]">Siswa</th>
+                    <th className="px-2 py-5 text-center">Masuk</th>
+                    <th className="px-2 py-5 text-center">Pulang</th>
+                    <th className="px-6 py-5 text-center w-24">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                  {loading ? (
+                    <tr><td colSpan={5} className="py-24 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-500 opacity-30" /></td></tr>
+                  ) : displayData.length > 0 ? (
+                    displayData.map((s, i) => (
+                      <tr key={s.id} className="text-[10px] hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="px-6 py-4 text-center text-slate-400 font-bold">{i + 1}</td>
+                        <td className="px-4 py-4"><div className="flex flex-col"><span className="font-black text-slate-700 dark:text-slate-200 uppercase truncate max-w-[150px]">{s.namaLengkap}</span><span className="text-[8px] font-mono text-indigo-500">ID: {s.idUnik}</span></div></td>
+                        <TimeCell rawValue={s.att.checkIn} type="masuk" />
+                        <TimeCell rawValue={s.att.checkOut} type="pulang" />
+                        <td className="px-6 py-4 text-center">
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
+                            s.att.status === 'Alpha' ? 'bg-rose-50 text-rose-600' :
+                            s.att.status === 'Haid' ? 'bg-pink-50 text-pink-600' : 'bg-emerald-50 text-emerald-600'
+                          }`}>
+                            {s.att.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="py-32 text-center opacity-30">
+                        <div className="flex flex-col items-center gap-4">
+                          <UsersIcon className="w-12 h-12" />
+                          <p className="text-[10px] font-black uppercase tracking-widest">Tidak ada data di rombel ini</p>
                         </div>
-
-                        <div className="mt-6 pt-4 border-t border-slate-50 dark:border-slate-800 text-center">
-                            <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest">IMAM Document Engine v6.2</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            ) : (
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-50 dark:bg-slate-900/50 border-b">
+                  <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    <th className="px-4 py-5">Siswa</th>
+                    <th className="px-3 py-5 text-center">Hadir</th>
+                    <th className="px-3 py-5 text-center">Haid</th>
+                    <th className="px-3 py-5 text-center">Izin</th>
+                    <th className="px-3 py-5 text-center">Sakit</th>
+                    <th className="px-3 py-5 text-center">Alpha</th>
+                    <th className="px-4 py-5 text-center">% Hadir</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                  {loading ? (
+                    <tr><td colSpan={7} className="py-24 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-500 opacity-30" /></td></tr>
+                  ) : monthlySummary.length > 0 ? (
+                    monthlySummary.map((s: any) => (
+                      <tr key={s.id} className="text-[10px] hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="px-4 py-4"><div className="flex flex-col"><span className="font-black text-slate-700 dark:text-slate-200 uppercase truncate max-w-[150px]">{s.namaLengkap}</span><span className="text-[8px] font-mono text-indigo-500">ID: {s.idUnik}</span></div></td>
+                        <td className="px-3 py-4 text-center font-black text-emerald-600">{s.hadir}</td>
+                        <td className="px-3 py-4 text-center font-black text-pink-600">{s.haid}</td>
+                        <td className="px-3 py-4 text-center font-black text-amber-600">{s.izin}</td>
+                        <td className="px-3 py-4 text-center font-black text-sky-600">{s.sakit}</td>
+                        <td className="px-3 py-4 text-center font-black text-rose-600">{s.alpha}</td>
+                        <td className="px-4 py-4 text-center"><span className="px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 font-black">{s.presentRate}%</span></td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="py-32 text-center opacity-30">
+                        <div className="flex flex-col items-center gap-4">
+                          <UsersIcon className="w-12 h-12" />
+                          <p className="text-[10px] font-black uppercase tracking-widest">Tidak ada data bulanan di rombel ini</p>
                         </div>
-                    </div>
-                </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             )}
-        </Layout>
-    );
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
 };
 
 const ReportStatCard = ({ val, label, color, bg, icon: Icon }: any) => (

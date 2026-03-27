@@ -1,22 +1,30 @@
-
 {
-  "name": "IMAM Management School",
-  "short_name": "IMAM",
+  "name": "IMAM - Integrated Madrasah",
+  "short_name": "IMAM V6.2",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0F172A",
-  "theme_color": "#0F172A",
+  "background_color": "#020617",
+  "theme_color": "#4f46e5",
   "orientation": "portrait",
+  "description": "Sistem Manajemen Madrasah Digital MAN 1 HST",
   "icons": [
     {
-      "src": "https://ui-avatars.com/api/?name=IMAM&background=0F172A&color=fff&size=192&rounded=true&length=4&font-size=0.33",
+      "src": "https://lh3.googleusercontent.com/d/1RGCXWnp19Y3UJe7cUWy-krY6S2KQmt9K",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "https://ui-avatars.com/api/?name=IMAM&background=0F172A&color=fff&size=512&rounded=true&length=4&font-size=0.33",
+      "src": "https://lh3.googleusercontent.com/d/1RGCXWnp19Y3UJe7cUWy-krY6S2KQmt9K",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://lh3.googleusercontent.com/d/1RGCXWnp19Y3UJe7cUWy-krY6S2KQmt9K",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

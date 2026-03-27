@@ -1,9 +1,15 @@
 
+/**
+ * @license
+ * IMAM System - Integrated Madrasah Academic Manager
+ */
+
 import React, { useState, useEffect } from 'react';
 import { XCircleIcon, ClockIcon, SparklesIcon, ArrowLeftIcon, Loader2 } from './Icons';
 import Layout from './Layout';
 import { db, isMockMode } from '../services/firebase';
 
+// Fix: Corrected GenericViewProps interface definition to standard TypeScript format
 interface GenericViewProps {
   title: string;
   onBack: () => void;
@@ -14,9 +20,10 @@ const GenericView: React.FC<GenericViewProps> = ({ title, onBack, description })
   const [notice, setNotice] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
-  const defaultNotice = "mohon maaf dikarenakan fasilitas kami sangat tidak mendukung satu fitur memakan waktu 30 hari kerja dengan waktu kerja 20 jam/hari";
+  const defaultNotice = "terimakasih telah menunggu";
 
   useEffect(() => {
+    // Fix: Properly implemented asynchronous data fetching inside useEffect
     const fetchNotice = async () => {
       if (isMockMode || !db) {
         setNotice(defaultNotice);

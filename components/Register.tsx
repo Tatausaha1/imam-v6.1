@@ -246,6 +246,20 @@ const Register: React.FC<RegisterProps> = ({ onLogin, onLoginClick }) => {
                         </div>
                     )}
                     {regMode === 'staff' && (
+                        <div className="grid grid-cols-2 gap-2">
+                            {[UserRole.GURU, UserRole.STAF, UserRole.ORANG_TUA].map(role => (
+                                <button
+                                    key={role}
+                                    type="button"
+                                    onClick={() => setSelectedRole(role)}
+                                    className={`py-3 rounded-xl text-[10px] font-black uppercase border transition-all ${selectedRole === role ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500'}`}
+                                >
+                                    {role}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    {regMode === 'staff' && (
                         <div className="group relative">
                             <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 ml-1 tracking-widest">Nama Lengkap & Gelar</label>
                             <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl py-4 px-5 text-slate-800 dark:text-white text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-inner" placeholder="MISAL: BUDI SANTOSO, S.PD" required />

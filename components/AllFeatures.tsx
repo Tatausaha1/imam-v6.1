@@ -1,4 +1,3 @@
-
 /**
  * @license
  * IMAM System - Integrated Madrasah Academic Manager
@@ -70,7 +69,7 @@ const AllFeatures: React.FC<AllFeaturesProps> = ({ onBack, onNavigate, userRole,
 
   return (
     <Layout title="Menu Eksplorasi" subtitle="Padat & Terintegrasi" icon={Squares2x2Icon} onBack={onBack} withBottomNav={true}>
-      <div className="p-3 lg:p-6 space-y-8 pb-32 max-w-5xl mx-auto">
+      <div className="p-3 lg:p-6 space-y-8 pb-32 max-w-md md:max-w-4xl mx-auto w-full">
         {sections.map(section => (
             <div key={section} className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <div className="flex items-center gap-2 pl-1">
@@ -78,7 +77,7 @@ const AllFeatures: React.FC<AllFeaturesProps> = ({ onBack, onNavigate, userRole,
                     <h3 className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-[0.25em] drop-shadow-sm">{section}</h3>
                 </div>
                 
-                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3 md:gap-4">
+                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-6 gap-3 md:gap-4">
                     {menuItems.filter(item => item.section === section).map((item, idx) => (
                         <button 
                             key={idx} 
@@ -98,33 +97,6 @@ const AllFeatures: React.FC<AllFeaturesProps> = ({ onBack, onNavigate, userRole,
                 </div>
             </div>
         ))}
-
-        {/* SECTION KHUSUS LOGOUT DI MOBILE MENU */}
-        {onLogout && (
-          <div className="space-y-4 pt-6 border-t border-slate-100 dark:border-slate-800 animate-in fade-in">
-             <div className="flex items-center gap-2 pl-1">
-                <div className="h-3 w-1 bg-rose-500 rounded-full"></div>
-                <h3 className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-[0.25em]">Akun & Keamanan</h3>
-             </div>
-             <button 
-                onClick={() => { if(window.confirm("Keluar dari aplikasi IMAM?")) onLogout(); }}
-                className="w-full flex items-center justify-between p-5 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-[2rem] active:scale-[0.98] transition-all group"
-             >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white dark:bg-rose-900/40 flex items-center justify-center text-rose-600 shadow-sm border border-rose-100 dark:border-rose-800">
-                    <LogOutIcon className="w-6 h-6" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-[11px] font-black text-rose-700 dark:text-rose-400 uppercase tracking-tight leading-none">Keluar dari Sesi</p>
-                    <p className="text-[8px] font-bold text-rose-500/60 uppercase mt-1">Selesaikan aktivitas Anda</p>
-                  </div>
-                </div>
-                <div className="w-8 h-8 rounded-full bg-white/50 dark:bg-rose-900/20 flex items-center justify-center">
-                    <LogOutIcon className="w-4 h-4 text-rose-400" />
-                </div>
-             </button>
-          </div>
-        )}
       </div>
     </Layout>
   );
