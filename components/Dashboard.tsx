@@ -67,159 +67,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
     }
 
     setUserName(currentUser.displayName || 'Pengguna');
+
     const unsubscribers: Array<() => void> = [];
-
-    if (isSiswa) {
-      let isCancelled = false;
-
-      const loadStudentDashboard = async () => {
-        try {
-          const userDoc = await db.collection('users').doc(currentUser.uid).get();
-          const userData = userDoc.exists ? userDoc.data() : null;
-
-          let studentId = userData?.studentId as string | undefined;
-          let studentName = userData?.displayName as string | undefined;
-
-          if (!studentId && currentUser.email) {
-            const byEmail = await db.collection('students').where('email', '==', currentUser.email).limit(1).get();
-            if (!byEmail.empty) {
-              studentId = byEmail.docs[0].id;
-              studentName = byEmail.docs[0].data().namaLengkap;
-            }
-          }
-
-          if (!studentId && currentUser.email?.endsWith('@siswa.imam.sch.id')) {
-            const nisn = currentUser.email.split('@')[0];
-            const byNisn = await db.collection('students').where('nisn', '==', nisn).limit(1).get();
-            if (!byNisn.empty) {
-              studentId = byNisn.docs[0].id;
-              studentName = byNisn.docs[0].data().namaLengkap;
-            }
-          }
-
-          if (studentName && !isCancelled) {
-            setUserName(studentName);
-          }
-
-          if (!studentId) {
-            if (!isCancelled) setLoading(false);
-            return;
-          }
-
-          const attDocId = `${studentId}_${todayStr}`;
-          const unsubMyAttendance = db.collection('attendance').doc(attDocId).onSnapshot(async (docSnap) => {
-            if (isCancelled) return;
-
-            if (docSnap.exists) {
-              setMyAttendance(docSnap.data());
-              setLoading(false);
-              return;
-            }
-
-            const fallback = await db.collection('attendance')
-              .where('studentId', '==', studentId)
-              .where('date', '==', todayStr)
-              .limit(1)
-              .get();
-
-            if (!fallback.empty) {
-              setMyAttendance(fallback.docs[0].data());
-            } else {
-              setMyAttendance(null);
-            }
-            setLoading(false);
-          }, () => {
-            if (!isCancelled) setLoading(false);
-          });
-
-          unsubscribers.push(unsubMyAttendance);
-        } catch {
-          if (!isCancelled) setLoading(false);
-        }
-      };
-
-      loadStudentDashboard();
-
-      return () => {
-        isCancelled = true;
-        unsubscribers.forEach((unsub) => unsub());
-      };
-    }
-
-    if (isGuru) {
-      let isCancelled = false;
-
-      const loadGuruDashboard = async () => {
-        try {
-          let targetClass = '';
-          const userDoc = await db.collection('users').doc(currentUser.uid).get();
-          if (userDoc.exists) {
-            const userData = userDoc.data() || {};
-            targetClass = String(
-              userData.class || userData.className || userData.tingkatRombel || userData.waliClass || ''
-            ).trim();
-            if (userData.displayName && !isCancelled) {
-              setUserName(userData.displayName);
-            }
-          }
-
-          if (!isCancelled) {
-            setStats(prev => ({ ...prev, teachers: 1 }));
-          }
-
-          let studentQuery: firebase.firestore.Query = db.collection('students').where('status', '==', 'Aktif');
-          if (targetClass) {
-            studentQuery = studentQuery.where('tingkatRombel', '==', targetClass);
-          }
-
-          unsubscribers.push(
-            studentQuery.onSnapshot((snap) => {
-              if (isCancelled) return;
-              setStats(prev => ({ ...prev, students: snap.size }));
-            })
-          );
-
-          let attendanceQuery: firebase.firestore.Query = db.collection('attendance').where('date', '==', todayStr);
-          if (targetClass) {
-            attendanceQuery = attendanceQuery.where('class', '==', targetClass);
-          }
-
-          unsubscribers.push(
-            attendanceQuery.onSnapshot((snap) => {
-              if (isCancelled) return;
-              const presentCount = snap.docs.filter((d) => {
-                const data = d.data();
-                return data.status === 'Hadir' || data.status === 'Haid';
-              }).length;
-
-              setStats((prev) => {
-                const percent = prev.students > 0 ? Math.round((presentCount / prev.students) * 100) : 0;
-                return { ...prev, attendanceToday: percent };
-              });
-              setLoading(false);
-            }, () => {
-              if (!isCancelled) setLoading(false);
-            })
-          );
-
-          unsubscribers.push(
-            db.collection('assignments').where('teacherId', '==', currentUser.uid).onSnapshot((snap) => {
-              if (isCancelled) return;
-              setStats(prev => ({ ...prev, newLetters: snap.size }));
-            })
-          );
-        } catch {
-          if (!isCancelled) setLoading(false);
-        }
-      };
-
-      loadGuruDashboard();
-
-      return () => {
-        isCancelled = true;
-        unsubscribers.forEach((unsub) => unsub());
-      };
-    }
 
     unsubscribers.push(
       db.collection('students').where('status', '==', 'Aktif').onSnapshot((snap) => {
@@ -255,10 +104,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
       })
     );
 
+    if (isSiswa) {
+      const attId = `${currentUser.uid}_${todayStr}`;
+      db.collection('attendance').doc(attId).get().then((myAttDoc) => {
+        if (myAttDoc.exists) setMyAttendance(myAttDoc.data());
+      }).catch(() => undefined);
+    }
+
     return () => {
       unsubscribers.forEach((unsub) => unsub());
     };
-  }, [userRole, isSiswa, isGuru]);
+  }, [userRole, isSiswa]);
 
   return (
     <div className="flex flex-col h-full bg-[#f8fafc] dark:bg-[#020617] overflow-hidden pt-[env(safe-area-inset-top)]">
@@ -314,9 +170,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
                 ) : (
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                         <StatCard icon={UsersGroupIcon} label="Siswa Aktif" val={loading ? "..." : stats.students} color="text-indigo-600" bg="bg-indigo-50" />
-                        <StatCard icon={AcademicCapIcon} label={isGuru ? 'Akun Guru' : 'Total Guru'} val={loading ? "..." : stats.teachers} color="text-emerald-600" bg="bg-emerald-50" />
+                        <StatCard icon={AcademicCapIcon} label="Total Guru" val={loading ? "..." : stats.teachers} color="text-emerald-600" bg="bg-emerald-50" />
                         <StatCard icon={CheckCircleIcon} label="Kehadiran" val={loading ? "..." : `${stats.attendanceToday}%`} color="text-rose-600" bg="bg-rose-50" />
-                        <StatCard icon={EnvelopeIcon} label={isGuru ? 'Tugas Aktif' : 'Surat Baru'} val={loading ? "..." : stats.newLetters} color="text-amber-600" bg="bg-amber-50" />
+                        <StatCard icon={EnvelopeIcon} label="Surat Baru" val={loading ? "..." : stats.newLetters} color="text-amber-600" bg="bg-amber-50" />
                     </div>
                 )}
             </section>
