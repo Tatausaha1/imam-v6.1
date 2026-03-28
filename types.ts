@@ -96,6 +96,9 @@ export interface Student {
   lastAccountActivity?: string;
   movedAt?: string;
   moveReason?: string;
+  parentUserId?: string;
+  parentEmail?: string;
+  parentLinkedAt?: string;
 }
 
 export interface UserData {

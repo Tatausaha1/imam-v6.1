@@ -10,6 +10,8 @@ import {
   CalendarIcon, ArrowDownTrayIcon, BuildingLibraryIcon, ChevronDownIcon, UsersIcon
 } from './Icons';
 import { db, isMockMode } from '../services/firebase';
+import { endOfMonth, format, parseISO, startOfMonth } from 'date-fns';
+import { id as localeID } from 'date-fns/locale/id';
 import { format } from 'date-fns';
 import { Student, UserRole, ViewState, ClassData } from '../types';
 import { toast } from 'sonner';
@@ -290,5 +292,22 @@ const Reports: React.FC<{ onBack: () => void, onNavigate: (v: ViewState) => void
     </Layout>
   );
 };
+
+const ReportStatCard = ({ val, label, color, bg, icon: Icon }: any) => (
+    <div className={`p-2.5 rounded-2xl text-center border border-slate-100 dark:border-slate-800 shadow-sm bg-white dark:bg-[#151E32] flex flex-col items-center justify-center`}>
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center mb-1.5 ${bg} dark:bg-opacity-10 ${color}`}>
+            <Icon className="w-3.5 h-3.5" />
+        </div>
+        <p className={`text-sm font-black ${color} tracking-tighter leading-none`}>{val}</p>
+        <p className="text-[7px] font-black text-slate-400 uppercase tracking-tighter mt-1 leading-none">{label}</p>
+    </div>
+);
+
+const SessionStatPill = ({ label, value }: { label: string; value: number }) => (
+    <div className="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-1 py-2 text-center">
+        <p className="text-xs font-black text-slate-800 dark:text-slate-100 leading-none">{value}</p>
+        <p className="text-[7px] mt-1 font-black uppercase tracking-tight text-slate-500">{label}</p>
+    </div>
+);
 
 export default Reports;
