@@ -61,33 +61,165 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
       return () => clearTimeout(timer);
     }
 
-    const fetchAllData = async () => {
-        setLoadingStats(true);
-        const uid = auth?.currentUser?.uid;
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
-        const cacheKey = `${uid || 'guest'}:${userRole}:${todayStr}`;
+    if (!currentUser || !db) {
+      setLoading(false);
+      return;
+    }
 
     setUserName(currentUser.displayName || 'Pengguna');
+    const unsubscribers: Array<() => void> = [];
 
-        if (!db || !uid) return;
+    if (isSiswa) {
+      let isCancelled = false;
 
-        const now = Date.now();
-        if (dashboardDataCache && dashboardDataCache.key === cacheKey && (now - dashboardDataCache.fetchedAt) < DASHBOARD_CACHE_TTL_MS) {
-            setStats(dashboardDataCache.payload.stats);
-            setMaleStudents(dashboardDataCache.payload.maleStudents);
-            setFemaleStudents(dashboardDataCache.payload.femaleStudents);
-            setManagedClass(dashboardDataCache.payload.managedClass);
-            setClassAttendancePct(dashboardDataCache.payload.classAttendancePct);
-            setLoadingStats(false);
-            return;
-        }
-
+      const loadStudentDashboard = async () => {
         try {
-            const [studentsSnap, teachersSnap, classesSnap] = await Promise.all([
-                db.collection('students').where('status', '==', 'Aktif').get(),
-                db.collection('teachers').get(),
-                db.collection('classes').get()
-            ]);
+          const userDoc = await db.collection('users').doc(currentUser.uid).get();
+          const userData = userDoc.exists ? userDoc.data() : null;
+
+          let studentId = userData?.studentId as string | undefined;
+          let studentName = userData?.displayName as string | undefined;
+
+          if (!studentId && currentUser.email) {
+            const byEmail = await db.collection('students').where('email', '==', currentUser.email).limit(1).get();
+            if (!byEmail.empty) {
+              studentId = byEmail.docs[0].id;
+              studentName = byEmail.docs[0].data().namaLengkap;
+            }
+          }
+
+          if (!studentId && currentUser.email?.endsWith('@siswa.imam.sch.id')) {
+            const nisn = currentUser.email.split('@')[0];
+            const byNisn = await db.collection('students').where('nisn', '==', nisn).limit(1).get();
+            if (!byNisn.empty) {
+              studentId = byNisn.docs[0].id;
+              studentName = byNisn.docs[0].data().namaLengkap;
+            }
+          }
+
+          if (studentName && !isCancelled) {
+            setUserName(studentName);
+          }
+
+          if (!studentId) {
+            if (!isCancelled) setLoading(false);
+            return;
+          }
+
+          const attDocId = `${studentId}_${todayStr}`;
+          const unsubMyAttendance = db.collection('attendance').doc(attDocId).onSnapshot(async (docSnap) => {
+            if (isCancelled) return;
+
+            if (docSnap.exists) {
+              setMyAttendance(docSnap.data());
+              setLoading(false);
+              return;
+            }
+
+            const fallback = await db.collection('attendance')
+              .where('studentId', '==', studentId)
+              .where('date', '==', todayStr)
+              .limit(1)
+              .get();
+
+            if (!fallback.empty) {
+              setMyAttendance(fallback.docs[0].data());
+            } else {
+              setMyAttendance(null);
+            }
+            setLoading(false);
+          }, () => {
+            if (!isCancelled) setLoading(false);
+          });
+
+          unsubscribers.push(unsubMyAttendance);
+        } catch {
+          if (!isCancelled) setLoading(false);
+        }
+      };
+
+      loadStudentDashboard();
+
+      return () => {
+        isCancelled = true;
+        unsubscribers.forEach((unsub) => unsub());
+      };
+    }
+
+    if (isGuru) {
+      let isCancelled = false;
+
+      const loadGuruDashboard = async () => {
+        try {
+          let targetClass = '';
+          const userDoc = await db.collection('users').doc(currentUser.uid).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data() || {};
+            targetClass = String(
+              userData.class || userData.className || userData.tingkatRombel || userData.waliClass || ''
+            ).trim();
+            if (userData.displayName && !isCancelled) {
+              setUserName(userData.displayName);
+            }
+          }
+
+          if (!isCancelled) {
+            setStats(prev => ({ ...prev, teachers: 1 }));
+          }
+
+          let studentQuery: firebase.firestore.Query = db.collection('students').where('status', '==', 'Aktif');
+          if (targetClass) {
+            studentQuery = studentQuery.where('tingkatRombel', '==', targetClass);
+          }
+
+          unsubscribers.push(
+            studentQuery.onSnapshot((snap) => {
+              if (isCancelled) return;
+              setStats(prev => ({ ...prev, students: snap.size }));
+            })
+          );
+
+          let attendanceQuery: firebase.firestore.Query = db.collection('attendance').where('date', '==', todayStr);
+          if (targetClass) {
+            attendanceQuery = attendanceQuery.where('class', '==', targetClass);
+          }
+
+          unsubscribers.push(
+            attendanceQuery.onSnapshot((snap) => {
+              if (isCancelled) return;
+              const presentCount = snap.docs.filter((d) => {
+                const data = d.data();
+                return data.status === 'Hadir' || data.status === 'Haid';
+              }).length;
+
+              setStats((prev) => {
+                const percent = prev.students > 0 ? Math.round((presentCount / prev.students) * 100) : 0;
+                return { ...prev, attendanceToday: percent };
+              });
+              setLoading(false);
+            }, () => {
+              if (!isCancelled) setLoading(false);
+            })
+          );
+
+          unsubscribers.push(
+            db.collection('assignments').where('teacherId', '==', currentUser.uid).onSnapshot((snap) => {
+              if (isCancelled) return;
+              setStats(prev => ({ ...prev, newLetters: snap.size }));
+            })
+          );
+        } catch {
+          if (!isCancelled) setLoading(false);
+        }
+      };
+
+      loadGuruDashboard();
+
+      return () => {
+        isCancelled = true;
+        unsubscribers.forEach((unsub) => unsub());
+      };
+    }
 
     unsubscribers.push(
       db.collection('students').where('status', '==', 'Aktif').onSnapshot((snap) => {
@@ -95,88 +227,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
       })
     );
 
-            if (isStaffAction || isKamad) {
-                [attendanceTodaySnap, lettersSnap] = await Promise.all([
-                    db.collection('attendance').where('date', '==', todayStr).get(),
-                    db.collection('letters').where('status', '==', 'Pending').get()
-                ]);
-            } else {
-                [attendanceTodaySnap, lettersSnap] = await Promise.all([
-                    db.collection('attendance').where('date', '==', todayStr).where('studentId', '==', uid).get(),
-                    db.collection('letters').where('userId', '==', uid).where('status', '==', 'Pending').get()
-                ]);
-            }
+    unsubscribers.push(
+      db.collection('teachers').onSnapshot((snap) => {
+        setStats(prev => ({ ...prev, teachers: snap.size }));
+      })
+    );
 
-            const nextStats = {
-                students: studentsSnap.size,
-                teachers: teachersSnap.size,
-                classes: classesSnap.size,
-                pendingLetters: lettersSnap.size,
-                attendanceToday: (isStaffAction || isKamad) ? attendanceTodaySnap.size : 0
-            };
+    unsubscribers.push(
+      db.collection('attendance').where('date', '==', todayStr).onSnapshot((snap) => {
+        const presentCount = snap.docs.filter((d) => {
+          const data = d.data();
+          return data.status === 'Hadir' || data.status === 'Haid';
+        }).length;
 
-            let nextManagedClass: ClassData | null = null;
-            let nextMaleStudents = sDocs.filter(d => d.jenisKelamin === 'Laki-laki').length;
-            let nextFemaleStudents = sDocs.filter(d => d.jenisKelamin === 'Perempuan').length;
-            let nextClassAttendancePct = 0;
-
-            if (isWaliKelas) {
-                const myClassDoc = classesSnap.docs.find(d => d.data().teacherId === uid);
-                if (myClassDoc) {
-                    nextManagedClass = { id: myClassDoc.id, ...myClassDoc.data() } as ClassData;
-                    const classStudents = sDocs.filter(s => s.tingkatRombel === nextManagedClass?.name);
-                    const classAttendanceCount = attendanceTodaySnap.docs.filter(d => d.data().class === nextManagedClass?.name).length;
-                    nextMaleStudents = classStudents.filter(s => s.jenisKelamin === 'Laki-laki').length;
-                    nextFemaleStudents = classStudents.filter(s => s.jenisKelamin === 'Perempuan').length;
-                    if (classStudents.length > 0) {
-                        nextClassAttendancePct = Math.round((classAttendanceCount / classStudents.length) * 100);
-                    }
-                }
-            }
-
-            setStats(nextStats);
-            setManagedClass(nextManagedClass);
-            setMaleStudents(nextMaleStudents);
-            setFemaleStudents(nextFemaleStudents);
-            setClassAttendancePct(nextClassAttendancePct);
-
-            dashboardDataCache = {
-                key: cacheKey,
-                fetchedAt: now,
-                payload: {
-                    stats: nextStats,
-                    maleStudents: nextMaleStudents,
-                    femaleStudents: nextFemaleStudents,
-                    managedClass: nextManagedClass,
-                    classAttendancePct: nextClassAttendancePct
-                }
-            };
-        } catch (e: any) { 
-            console.error("Dashboard Error:", e.message); 
-        } finally { 
-            setLoadingStats(false); 
-        }
-    };
-    fetchAllData();
-  }, [userRole, isWaliKelas, isStaffAction, isKamad]);
-
-  useEffect(() => {
-      const uid = auth?.currentUser?.uid;
-      if (!uid || !db || isMockMode) return;
-
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
-      const attendanceRef = db.collection('attendance');
-      const query = userIdUnik
-        ? attendanceRef.where('date', '==', todayStr).where('idUnik', '==', userIdUnik).limit(1)
-        : attendanceRef.where('date', '==', todayStr).where('studentId', '==', uid).limit(1);
-
-      query
-        .get()
-        .then((snap) => {
-          if (!snap.empty) setTodayAttendance(snap.docs[0].data());
-        })
-        .catch(() => {});
-  }, [userIdUnik]);
+        setStats((prev) => {
+          const percent = prev.students > 0 ? Math.round((presentCount / prev.students) * 100) : 0;
+          return { ...prev, attendanceToday: percent };
+        });
 
         setLoading(false);
       }, () => setLoading(false))
@@ -188,17 +255,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
       })
     );
 
-    if (isSiswa) {
-      const attId = `${currentUser.uid}_${todayStr}`;
-      db.collection('attendance').doc(attId).get().then((myAttDoc) => {
-        if (myAttDoc.exists) setMyAttendance(myAttDoc.data());
-      }).catch(() => undefined);
-    }
-
     return () => {
       unsubscribers.forEach((unsub) => unsub());
     };
-  }, [userRole, isSiswa]);
+  }, [userRole, isSiswa, isGuru]);
 
   return (
     <div className="flex flex-col h-full bg-[#f8fafc] dark:bg-[#020617] overflow-hidden pt-[env(safe-area-inset-top)]">
@@ -254,9 +314,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, userRole, onToggleThe
                 ) : (
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                         <StatCard icon={UsersGroupIcon} label="Siswa Aktif" val={loading ? "..." : stats.students} color="text-indigo-600" bg="bg-indigo-50" />
-                        <StatCard icon={AcademicCapIcon} label="Total Guru" val={loading ? "..." : stats.teachers} color="text-emerald-600" bg="bg-emerald-50" />
+                        <StatCard icon={AcademicCapIcon} label={isGuru ? 'Akun Guru' : 'Total Guru'} val={loading ? "..." : stats.teachers} color="text-emerald-600" bg="bg-emerald-50" />
                         <StatCard icon={CheckCircleIcon} label="Kehadiran" val={loading ? "..." : `${stats.attendanceToday}%`} color="text-rose-600" bg="bg-rose-50" />
-                        <StatCard icon={EnvelopeIcon} label="Surat Baru" val={loading ? "..." : stats.newLetters} color="text-amber-600" bg="bg-amber-50" />
+                        <StatCard icon={EnvelopeIcon} label={isGuru ? 'Tugas Aktif' : 'Surat Baru'} val={loading ? "..." : stats.newLetters} color="text-amber-600" bg="bg-amber-50" />
                     </div>
                 )}
             </section>
