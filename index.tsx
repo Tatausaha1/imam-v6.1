@@ -15,10 +15,49 @@ if (!rootElement) {
 // Registrasi Service Worker untuk Fitur Instalasi (PWA)
 // Folder public akan dipindahkan ke root '/' saat build di Vercel/Vite
 if ('serviceWorker' in navigator) {
+  let isRefreshing = false;
+
+  const onControllerChange = () => {
+    if (isRefreshing) return;
+    isRefreshing = true;
+    window.location.reload();
+  };
+
+  navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js')
-      .then(reg => console.log('IMAM PWA: Service Worker Registered'))
-      .catch(err => console.log('IMAM PWA: Service Worker Registration Failed', err));
+      .then((reg) => {
+        const requestImmediateActivation = () => {
+          if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        };
+
+        const triggerUpdateCheck = () => reg.update().catch(() => undefined);
+
+        requestImmediateActivation();
+
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              requestImmediateActivation();
+            }
+          });
+        });
+
+        setInterval(triggerUpdateCheck, 60 * 60 * 1000);
+
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') triggerUpdateCheck();
+        });
+
+        window.addEventListener('online', triggerUpdateCheck);
+
+        console.log('IMAM PWA: Service Worker Registered');
+      })
+      .catch((err) => console.log('IMAM PWA: Service Worker Registration Failed', err));
   });
 }
 
