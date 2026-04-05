@@ -25,6 +25,19 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve('.'),
         }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              vendor_react: ['react', 'react-dom'],
+              vendor_firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+              vendor_qr_pdf: ['html5-qrcode', 'jspdf', 'jspdf-autotable', 'qrcode.react'],
+              vendor_xlsx: ['xlsx'],
+              vendor_icons: ['lucide-react'],
+            }
+          }
+        }
       }
     };
 });
